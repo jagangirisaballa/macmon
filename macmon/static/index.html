@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-density="cozy">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>macmon — System Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0A0A0A;--bg-elev-1:#0F0F0F;--bg-elev-2:#141414;--bg-hover:#1A1A1A;
+    --surface:#111111;--border:#1F1F1F;--border-strong:#2A2A2A;--divider:#161616;
+    --text:#EDEDED;--text-muted:#8A8A8A;--text-dim:#5A5A5A;--text-faint:#3A3A3A;
+    --accent:#3B82F6;--accent-hover:#60A5FA;--accent-soft:rgba(59,130,246,0.12);
+    --ok:#22C55E;--ok-soft:rgba(34,197,94,0.12);
+    --warn:#F59E0B;--warn-soft:rgba(245,158,11,0.14);
+    --crit:#EF4444;--crit-soft:rgba(239,68,68,0.14);
+    --f-sans:'Geist',-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif;
+    --f-mono:'Geist Mono','SF Mono',ui-monospace,monospace;
+    --r-sm:6px;--r-md:10px;--r-lg:14px;--r-pill:999px;
+    --sh-1:0 1px 0 0 rgba(255,255,255,0.03) inset,0 1px 2px rgba(0,0,0,0.4);
+    --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  html[data-theme="light"] {
+    --bg:#FAFAFA;--bg-elev-1:#FFFFFF;--bg-elev-2:#FFFFFF;--bg-hover:#F2F2F2;
+    --surface:#FFFFFF;--border:#EAEAEA;--border-strong:#D4D4D4;--divider:#F0F0F0;
+    --text:#0A0A0A;--text-muted:#666666;--text-dim:#999999;--text-faint:#CCCCCC;
+    --accent:#2563EB;--accent-hover:#1D4ED8;--accent-soft:rgba(37,99,235,0.10);
+    --ok:#16A34A;--ok-soft:rgba(22,163,74,0.10);
+    --warn:#D97706;--warn-soft:rgba(217,119,6,0.12);
+    --crit:#DC2626;--crit-soft:rgba(220,38,38,0.10);
+    --sh-1:0 1px 2px rgba(0,0,0,0.04);
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:var(--f-sans);font-feature-settings:'ss01','cv11';background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5;min-height:100vh;transition:background-color 200ms var(--ease),color 200ms var(--ease)}
+  button{font-family:inherit;color:inherit;cursor:pointer}
+  .mono{font-family:var(--f-mono);font-feature-settings:'ss01','zero';letter-spacing:-0.01em}
+  .tnum{font-variant-numeric:tabular-nums}
+  .app{max-width:1400px;margin:0 auto;padding:28px 32px 48px}
+  .hdr{display:flex;align-items:center;justify-content:space-between;padding-bottom:24px;margin-bottom:24px;border-bottom:1px solid var(--divider)}
+  .hdr__brand{display:flex;align-items:center;gap:12px}
+  .hdr__logo{width:28px;height:28px;border-radius:7px;background:var(--text);color:var(--bg);display:grid;place-items:center;font-family:var(--f-mono);font-weight:600;font-size:13px;letter-spacing:-0.03em}
+  .hdr__name{font-size:15px;font-weight:600;letter-spacing:-0.01em}
+  .hdr__ver{font-family:var(--f-mono);font-size:11px;color:var(--text-dim);padding:2px 6px;border:1px solid var(--border);border-radius:var(--r-sm)}
+  .hdr__meta{display:flex;align-items:center;gap:16px}
+  .hdr__ts{font-family:var(--f-mono);font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:8px}
+  .hdr__ts::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft);animation:pulse 2.4s ease-in-out infinite}
+  .hdr__ts.disconnected::before{background:var(--crit);box-shadow:0 0 0 3px var(--crit-soft);animation:none}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+  .hdr__iconbtn{width:32px;height:32px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--bg-elev-1);display:grid;place-items:center;color:var(--text-muted);transition:all 160ms var(--ease)}
+  .hdr__iconbtn:hover{background:var(--bg-hover);color:var(--text);border-color:var(--border-strong)}
+  .hdr__iconbtn svg{width:15px;height:15px}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:4px 10px 4px 8px;border-radius:var(--r-pill);font-size:12px;font-weight:500;letter-spacing:-0.005em;border:1px solid transparent;line-height:1}
+  .pill__dot{width:6px;height:6px;border-radius:50%}
+  .pill--ok{background:var(--ok-soft);color:var(--ok);border-color:rgba(34,197,94,0.22)}
+  .pill--ok .pill__dot{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+  .pill--warn{background:var(--warn-soft);color:var(--warn);border-color:rgba(245,158,11,0.28)}
+  .pill--warn .pill__dot{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+  .pill--crit{background:var(--crit-soft);color:var(--crit);border-color:rgba(239,68,68,0.28)}
+  .pill--crit .pill__dot{background:var(--crit);box-shadow:0 0 6px var(--crit);animation:blink 1.2s ease-in-out infinite}
+  .pill--muted{background:var(--bg-elev-1);color:var(--text-muted);border-color:var(--border)}
+  .pill--muted .pill__dot{background:var(--text-dim)}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+  .alert{display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;align-items:center;padding:12px 14px;margin-bottom:20px;border-radius:var(--r-md);animation:slideIn 380ms var(--ease)}
+  .alert[hidden]{display:none}
+  .alert--warn{background:var(--warn-soft);border:1px solid rgba(245,158,11,0.28)}
+  .alert--crit{background:var(--crit-soft);border:1px solid rgba(239,68,68,0.28)}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  .alert__icon{width:28px;height:28px;border-radius:var(--r-sm);display:grid;place-items:center}
+  .alert--warn .alert__icon{background:rgba(245,158,11,0.18);color:var(--warn)}
+  .alert--crit .alert__icon{background:rgba(239,68,68,0.18);color:var(--crit)}
+  .alert__icon svg{width:14px;height:14px}
+  .alert__body{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .alert__title{font-weight:600;font-size:13px;color:var(--text);letter-spacing:-0.005em}
+  .alert__desc{font-size:12.5px;color:var(--text-muted)}
+  .alert__cta{background:var(--text);color:var(--bg);border:none;border-radius:var(--r-sm);padding:6px 12px;font-size:12px;font-weight:500;transition:transform 120ms var(--ease)}
+  .alert__cta:hover{transform:translateY(-1px)}
+  .alert__close{width:24px;height:24px;border-radius:5px;background:transparent;border:none;display:grid;place-items:center;opacity:.7;transition:opacity 120ms}
+  .alert__close:hover{opacity:1}
+  .metric-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+  @media(max-width:1080px){.metric-row{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.metric-row{grid-template-columns:1fr}}
+  .metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 18px 16px;display:grid;grid-template-columns:1fr auto;gap:8px 16px;align-items:center;box-shadow:var(--sh-1);transition:border-color 160ms var(--ease)}
+  .metric:hover{border-color:var(--border-strong)}
+  .metric__head{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+  .metric__label{font-size:12px;font-weight:500;color:var(--text-muted);letter-spacing:.02em;text-transform:uppercase;display:flex;align-items:center;gap:7px}
+  .metric__label svg{width:13px;height:13px;color:var(--text-dim)}
+  .metric__status{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase}
+  .metric__values{display:flex;flex-direction:column;gap:4px}
+  .metric__pct{font-family:var(--f-mono);font-size:30px;font-weight:500;letter-spacing:-0.03em;line-height:1;color:var(--text);font-variant-numeric:tabular-nums}
+  .metric__pct sub{font-size:14px;color:var(--text-dim);margin-left:2px;vertical-align:baseline;font-weight:400}
+  .metric__sub{font-family:var(--f-mono);font-size:11.5px;color:var(--text-muted)}
+  .metric__sub strong{color:var(--text);font-weight:500}
+  .gauge{position:relative;width:72px;height:72px}
+  .gauge svg{transform:rotate(-90deg);width:100%;height:100%}
+  .gauge__track{stroke:var(--border);fill:none}
+  .gauge__fill{fill:none;stroke-linecap:round;transition:stroke-dashoffset 700ms var(--ease),stroke 300ms var(--ease);filter:drop-shadow(0 0 6px currentColor)}
+  .gauge--ok .gauge__fill{stroke:var(--ok)}
+  .gauge--warn .gauge__fill{stroke:var(--warn)}
+  .gauge--crit .gauge__fill{stroke:var(--crit);animation:gaugePulse 1.6s ease-in-out infinite}
+  @keyframes gaugePulse{0%,100%{filter:drop-shadow(0 0 4px currentColor)}50%{filter:drop-shadow(0 0 10px currentColor)}}
+  .gauge__center{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-mono);font-size:10.5px;font-weight:500;color:var(--text-muted);letter-spacing:-0.01em}
+  .grid-2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:14px}
+  @media(max-width:1080px){.grid-2{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--sh-1);overflow:hidden}
+  .panel__head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--divider)}
+  .panel__title{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;letter-spacing:-0.005em}
+  .panel__count{font-family:var(--f-mono);font-size:11px;color:var(--text-muted);padding:2px 7px;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:var(--r-sm)}
+  .panel__actions{display:flex;gap:6px;align-items:center}
+  .panel__filter{font-size:11.5px;color:var(--text-muted);background:transparent;border:1px solid var(--border);padding:4px 10px;border-radius:var(--r-sm);transition:all 120ms}
+  .panel__filter:hover{color:var(--text);border-color:var(--border-strong)}
+  .panel__filter[aria-pressed="true"]{background:var(--bg-hover);color:var(--text)}
+  .row{display:grid;align-items:center;padding:12px 18px;border-bottom:1px solid var(--divider);font-size:13px;transition:background-color 120ms var(--ease)}
+  .row:last-child{border-bottom:none}
+  .row:hover{background:var(--bg-hover)}
+  .svc{grid-template-columns:auto 1fr auto auto auto;gap:14px}
+  .svc__icon{width:28px;height:28px;border-radius:var(--r-sm);background:var(--bg-elev-2);display:grid;place-items:center;font-family:var(--f-mono);font-size:11px;font-weight:600;color:var(--text-muted);border:1px solid var(--border)}
+  .svc__info{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .svc__name{font-weight:500;letter-spacing:-0.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .svc__path{font-family:var(--f-mono);font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .svc__mem{font-family:var(--f-mono);font-size:12px;color:var(--text-muted);min-width:64px;text-align:right}
+  .svc__mem strong{color:var(--text);font-weight:500}
+  .toggle{--w:32px;--h:18px;width:var(--w);height:var(--h);border-radius:var(--r-pill);background:var(--border-strong);border:none;padding:0;position:relative;transition:background-color 200ms var(--ease)}
+  .toggle::after{content:'';position:absolute;top:2px;left:2px;width:calc(var(--h) - 4px);height:calc(var(--h) - 4px);border-radius:50%;background:#fff;transition:transform 240ms var(--ease);box-shadow:0 1px 2px rgba(0,0,0,0.25)}
+  .toggle[aria-checked="true"]{background:var(--ok)}
+  .toggle[aria-checked="true"]::after{transform:translateX(calc(var(--w) - var(--h)))}
+  .proc{grid-template-columns:32px 1fr 80px 80px 32px;gap:12px}
+  .proc__pid{font-family:var(--f-mono);font-size:11.5px;color:var(--text-dim)}
+  .proc__name{font-weight:500;letter-spacing:-0.005em;display:flex;align-items:center;gap:8px;min-width:0}
+  .proc__app{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .proc__tag{font-family:var(--f-mono);font-size:10px;color:var(--text-muted);padding:1px 5px;background:var(--bg-elev-2);border-radius:4px;border:1px solid var(--border);flex-shrink:0}
+  .proc__num{font-family:var(--f-mono);font-size:12px;text-align:right;color:var(--text);font-variant-numeric:tabular-nums}
+  .proc__num--muted{color:var(--text-muted)}
+  .proc__num--warn{color:var(--warn)}
+  .proc__num--crit{color:var(--crit)}
+  .kill{width:26px;height:26px;border-radius:6px;border:1px solid transparent;background:transparent;color:var(--text-dim);display:grid;place-items:center;transition:all 120ms}
+  .kill:hover{color:var(--crit);background:var(--crit-soft);border-color:rgba(239,68,68,0.22)}
+  .kill svg{width:13px;height:13px}
+  .proc-head{display:grid;grid-template-columns:32px 1fr 80px 80px 32px;gap:12px;padding:8px 18px;border-bottom:1px solid var(--divider);background:var(--bg-elev-1)}
+  .proc-head__cell{font-family:var(--f-mono);font-size:10px;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;text-align:right}
+  .proc-head__cell:first-child,.proc-head__cell:nth-child(2){text-align:left}
+  .recs{display:flex;flex-direction:column;gap:10px;padding:14px}
+  .rec{border:1px solid var(--border);border-radius:var(--r-md);padding:14px;background:var(--bg-elev-1);display:grid;grid-template-columns:auto 1fr;gap:12px;transition:border-color 160ms,transform 160ms var(--ease)}
+  .rec:hover{border-color:var(--border-strong);transform:translateY(-1px)}
+  .rec__prio{width:32px;height:32px;border-radius:var(--r-sm);display:grid;place-items:center;flex-shrink:0}
+  .rec__prio svg{width:14px;height:14px}
+  .rec--high .rec__prio{background:var(--crit-soft);color:var(--crit)}
+  .rec--medium .rec__prio{background:var(--warn-soft);color:var(--warn)}
+  .rec--low .rec__prio{background:var(--accent-soft);color:var(--accent)}
+  .rec__body{min-width:0}
+  .rec__row1{display:flex;align-items:center;gap:8px;margin-bottom:2px;flex-wrap:wrap}
+  .rec__title{font-weight:600;font-size:13px;letter-spacing:-0.005em}
+  .rec__badge{font-family:var(--f-mono);font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border-radius:4px;line-height:1}
+  .rec--high .rec__badge{background:var(--crit-soft);color:var(--crit)}
+  .rec--medium .rec__badge{background:var(--warn-soft);color:var(--warn)}
+  .rec--low .rec__badge{background:var(--accent-soft);color:var(--accent)}
+  .rec__desc{font-size:12.5px;color:var(--text-muted);margin-bottom:10px}
+  .rec__actions{display:flex;gap:8px;align-items:center}
+  .btn{font-size:12px;font-weight:500;padding:6px 11px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--bg-elev-2);color:var(--text);letter-spacing:-0.005em;transition:all 120ms var(--ease);display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+  .btn:hover{background:var(--bg-hover);border-color:var(--border-strong)}
+  .btn--primary{background:var(--text);color:var(--bg);border-color:var(--text)}
+  .btn--primary:hover{opacity:.85}
+  .btn--ghost{background:transparent;border-color:transparent;color:var(--text-muted)}
+  .btn--ghost:hover{background:var(--bg-hover);color:var(--text)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .ftr{margin-top:28px;padding-top:20px;border-top:1px solid var(--divider);display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text-dim);flex-wrap:wrap;gap:12px}
+  .ftr__links{display:flex;gap:18px}
+  .ftr__links a{color:var(--text-muted);text-decoration:none;transition:color 120ms}
+  .ftr__links a:hover{color:var(--text)}
+  .ftr__sys{font-family:var(--f-mono);font-size:11px}
+  .toast-wrap{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:999}
+  .toast{background:var(--bg-elev-1);border:1px solid var(--border-strong);border-radius:var(--r-md);padding:10px 14px;font-size:12.5px;box-shadow:0 4px 12px rgba(0,0,0,.4);animation:popIn 260ms var(--ease);max-width:320px}
+  .toast--err{border-color:rgba(239,68,68,.3);color:var(--crit)}
+  @keyframes popIn{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+  #connecting{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:500}
+  #connecting.hidden{display:none}
+  #connecting .logo{font-family:var(--f-mono);font-size:28px;font-weight:600;letter-spacing:-0.03em;color:var(--text)}
+  #connecting .sub{font-family:var(--f-mono);font-size:12px;color:var(--text-muted)}
+  .spinner{width:20px;height:20px;border:2px solid var(--border-strong);border-top-color:var(--ok);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  html[data-density="compact"] .metric{padding:14px 14px 12px}
+  html[data-density="compact"] .row{padding:9px 14px}
+  html[data-density="compact"] .panel__head{padding:11px 14px}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:5px;border:2px solid var(--bg)}
+  ::-webkit-scrollbar-track{background:transparent}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}}
+</style>
+</head>
+<body>
+
+<div id="connecting">
+  <div class="logo">macmon</div>
+  <div class="spinner"></div>
+  <div class="sub">connecting to localhost:9999…</div>
+</div>
+
+<div class="app">
+  <header class="hdr">
+    <div class="hdr__brand">
+      <div class="hdr__logo">M</div>
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="hdr__name">macmon</div>
+          <span class="hdr__ver mono">v1.0.0</span>
+        </div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:1px;">local · no telemetry</div>
+      </div>
+    </div>
+    <div class="hdr__meta">
+      <span class="pill pill--muted" id="global-pill">
+        <span class="pill__dot"></span>
+        <span id="global-pill-label">Connecting…</span>
+      </span>
+      <div class="hdr__ts" id="hdr-ts">
+        <span>Live</span>
+        <span id="timestamp">--:--:--</span>
+      </div>
+      <button class="hdr__iconbtn" id="theme-btn" title="Toggle theme">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M13.5 8.8a5 5 0 1 1-6.3-6.3 4 4 0 0 0 6.3 6.3Z" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="alert alert--warn" id="alert" role="alert" hidden>
+    <div class="alert__icon">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M8 5v3.5M8 11h.01" stroke-linecap="round"/>
+        <path d="M6.9 1.8 1.4 12.2a1.3 1.3 0 0 0 1.1 1.9h11a1.3 1.3 0 0 0 1.1-1.9L9.1 1.8a1.3 1.3 0 0 0-2.2 0Z" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="alert__body">
+      <div class="alert__title" id="alert-title">System is running slow</div>
+      <div class="alert__desc" id="alert-desc"></div>
+    </div>
+    <button class="alert__cta" id="alert-cta">View Recommendations</button>
+    <button class="alert__close" id="alert-close" aria-label="Dismiss">
+      <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="m4 4 8 8M12 4l-8 8" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+
+  <section class="metric-row" id="metric-row"></section>
+
+  <section class="grid-2">
+    <div class="panel">
+      <div class="panel__head">
+        <div class="panel__title">Dev Services <span class="panel__count mono" id="svc-count">—</span></div>
+        <div class="panel__actions">
+          <button class="panel__filter" aria-pressed="true" data-filter="all">All</button>
+          <button class="panel__filter" data-filter="running">Running</button>
+          <button class="panel__filter" data-filter="stopped">Stopped</button>
+        </div>
+      </div>
+      <div id="svc-list"></div>
+    </div>
+    <div class="panel">
+      <div class="panel__head">
+        <div class="panel__title">Recommendations <span class="panel__count mono" id="rec-count">0</span></div>
+      </div>
+      <div class="recs" id="rec-list"></div>
+    </div>
+  </section>
+
+  <section class="panel" style="margin-bottom:14px;">
+    <div class="panel__head">
+      <div class="panel__title">Top Processes <span class="panel__count mono" id="proc-sort-label">by memory</span></div>
+      <div class="panel__actions">
+        <button class="panel__filter" data-sort="cpu">CPU</button>
+        <button class="panel__filter" aria-pressed="true" data-sort="memory">Memory</button>
+      </div>
+    </div>
+    <div class="proc-head">
+      <div class="proc-head__cell">PID</div>
+      <div class="proc-head__cell">Process</div>
+      <div class="proc-head__cell">CPU</div>
+      <div class="proc-head__cell">Memory</div>
+      <div class="proc-head__cell"></div>
+    </div>
+    <div id="proc-list"></div>
+  </section>
+
+  <footer class="ftr">
+    <div class="ftr__sys">macmon v1.0.0 · local-only · no telemetry · MIT</div>
+    <div class="ftr__links">
+      <a href="https://github.com/jagang/macmon" target="_blank">GitHub ↗</a>
+      <a href="https://github.com/jagang/macmon/issues" target="_blank">Issues</a>
+    </div>
+  </footer>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-cpu" viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="5.5" y="5.5" width="5" height="5" rx=".6" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M6 1.5v1.5M10 1.5v1.5M6 13v1.5M10 13v1.5M1.5 6H3M1.5 10H3M13 6h1.5M13 10h1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-mem" viewBox="0 0 16 16"><rect x="1.5" y="5" width="13" height="6" rx=".8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4 7v2M6.5 7v2M9 7v2M11.5 7v2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 16 16"><path d="M3 5h9l-2-2M13 11H4l2 2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-disk" viewBox="0 0 16 16"><ellipse cx="8" cy="4" rx="5.5" ry="1.8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 4v8c0 1 2.5 1.8 5.5 1.8s5.5-.8 5.5-1.8V4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 8c0 1 2.5 1.8 5.5 1.8s5.5-.8 5.5-1.8" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+    <symbol id="i-x" viewBox="0 0 16 16"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 16 16"><path d="M9 1.5 3 9h4l-1 5.5L13 7H9l0-5.5Z" fill="currentColor"/></symbol>
+    <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 7.5v3.5M8 5v.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
+<script>
+const WS_URL = 'ws://' + location.host + '/ws';
+const API_URL = 'http://' + location.host;
+const GAUGE_R = 30, GAUGE_C = 2 * Math.PI * GAUGE_R;
+let _data = null, _procSort = 'memory', _svcFilter = 'all', _alertDismissed = false;
+let _theme = localStorage.getItem('macmon-theme') || 'dark';
+
+function sev(p) { return p >= 85 ? 'crit' : p >= 65 ? 'warn' : 'ok'; }
+function sevLabel(s) { return {ok:'Normal',warn:'Elevated',crit:'Critical'}[s]; }
+function sevColor(s) { return {ok:'var(--ok)',warn:'var(--warn)',crit:'var(--crit)'}[s]; }
+function sevPillCls(s) { return {ok:'pill--ok',warn:'pill--warn',crit:'pill--crit'}[s]; }
+
+function gaugeHtml(pct) {
+  const offset = GAUGE_C * (1 - pct / 100), s = sev(pct);
+  return '<div class="gauge gauge--' + s + '">' +
+    '<svg viewBox="0 0 72 72" aria-hidden="true">' +
+    '<circle class="gauge__track" cx="36" cy="36" r="' + GAUGE_R + '" stroke-width="6"/>' +
+    '<circle class="gauge__fill" cx="36" cy="36" r="' + GAUGE_R + '" stroke-width="6"' +
+    ' stroke-dasharray="' + GAUGE_C.toFixed(2) + '" stroke-dashoffset="' + offset.toFixed(2) + '"/>' +
+    '</svg><div class="gauge__center">' + sevLabel(s).slice(0,3).toUpperCase() + '</div></div>';
+}
+
+function metricHtml(label, icon, pct, sub) {
+  const s = sev(pct);
+  return '<div class="metric">' +
+    '<div class="metric__head">' +
+    '<div class="metric__label"><svg><use href="#i-' + icon + '"/></svg>' + label + '</div>' +
+    '<div class="metric__status" style="color:' + sevColor(s) + '">' + sevLabel(s) + '</div></div>' +
+    '<div class="metric__values">' +
+    '<div class="metric__pct tnum">' + pct + '<sub>%</sub></div>' +
+    '<div class="metric__sub">' + sub + '</div></div>' +
+    gaugeHtml(pct) + '</div>';
+}
+
+function renderMetrics(d) {
+  const m = d.memory, sw = d.swap, dk = d.disk, cpu = d.cpu;
+  document.getElementById('metric-row').innerHTML =
+    metricHtml('CPU','cpu', cpu.percent, '<strong>' + cpu.percent + '%</strong> · ' + cpu.cores + ' cores') +
+    metricHtml('Memory','mem', m.percent, '<strong>' + m.used_gb.toFixed(1) + ' GB</strong> / ' + m.total_gb + ' GB · ' + m.compressed_gb + ' GB compressed') +
+    metricHtml('Swap','swap', sw.percent, '<strong>' + sw.used_gb.toFixed(1) + ' GB</strong> / ' + sw.total_gb + ' GB') +
+    metricHtml('Disk','disk', dk.percent, '<strong>' + dk.used_gb + ' GB</strong> / ' + dk.total_gb + ' GB · ' + dk.free_gb + ' GB free');
+}
+
+function updateGaugesInPlace(d) {
+  const cards = document.querySelectorAll('.metric');
+  if (cards.length !== 4) { renderMetrics(d); return; }
+  const vals = [d.cpu.percent, d.memory.percent, d.swap.percent, d.disk.percent];
+  const subs = [
+    '<strong>' + d.cpu.percent + '%</strong> · ' + d.cpu.cores + ' cores',
+    '<strong>' + d.memory.used_gb.toFixed(1) + ' GB</strong> / ' + d.memory.total_gb + ' GB · ' + d.memory.compressed_gb + ' GB compressed',
+    '<strong>' + d.swap.used_gb.toFixed(1) + ' GB</strong> / ' + d.swap.total_gb + ' GB',
+    '<strong>' + d.disk.used_gb + ' GB</strong> / ' + d.disk.total_gb + ' GB · ' + d.disk.free_gb + ' GB free'
+  ];
+  cards.forEach(function(card, i) {
+    var pct = vals[i], s = sev(pct);
+    var gauge = card.querySelector('.gauge');
+    gauge.className = 'gauge gauge--' + s;
+    gauge.querySelector('.gauge__fill').style.strokeDashoffset = (GAUGE_C * (1 - pct/100)).toFixed(2);
+    gauge.querySelector('.gauge__center').textContent = sevLabel(s).slice(0,3).toUpperCase();
+    card.querySelector('.metric__pct').innerHTML = pct + '<sub>%</sub>';
+    card.querySelector('.metric__sub').innerHTML = subs[i];
+    var st = card.querySelector('.metric__status');
+    st.textContent = sevLabel(s); st.style.color = sevColor(s);
+  });
+}
+
+function renderAlert(d) {
+  var alert = document.getElementById('alert');
+  if (_alertDismissed || d.status === 'normal') { alert.hidden = true; return; }
+  alert.hidden = false;
+  alert.className = 'alert alert--' + (d.status === 'critical' ? 'crit' : 'warn');
+  document.getElementById('alert-title').textContent = d.status === 'critical' ? 'System critical' : 'System is running slow';
+  document.getElementById('alert-desc').textContent = d.status_reason || '';
+}
+
+function renderPill(d) {
+  var map = {normal:['pill--ok','Healthy'], warning:['pill--warn','Warning'], critical:['pill--crit','Critical']};
+  var entry = map[d.status] || ['pill--ok','Healthy'];
+  document.getElementById('global-pill').className = 'pill ' + entry[0];
+  document.getElementById('global-pill-label').textContent = entry[1];
+}
+
+function renderServices(services) {
+  var filtered = _svcFilter === 'running' ? services.filter(function(s){return s.running;})
+               : _svcFilter === 'stopped' ? services.filter(function(s){return !s.running;})
+               : services.slice().sort(function(a, b) {
+                   if (a.running !== b.running) return a.running ? -1 : 1;
+                   // stopped: most recently stopped first (higher uptime_minutes = ran longer = stopped more recently)
+                   return (b.uptime_minutes || 0) - (a.uptime_minutes || 0);
+                 });
+  var running = services.filter(function(s){return s.running;}).length;
+  document.getElementById('svc-count').textContent = running + ' running · ' + services.length + ' total';
+  if (filtered.length === 0) {
+    document.getElementById('svc-list').innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:12.5px;">No services match filter.</div>';
+    return;
+  }
+  document.getElementById('svc-list').innerHTML = filtered.map(function(s) {
+    var letter = s.name.charAt(0).toUpperCase();
+    var uptime = s.uptime_minutes != null
+      ? (s.uptime_minutes < 60 ? s.uptime_minutes + 'm' : Math.floor(s.uptime_minutes/60) + 'h ' + (s.uptime_minutes%60) + 'm')
+      : '—';
+    var isSelf = s.is_self === true;
+    var isMcpClaude = s.type === 'mcp-claude';
+    var isReadOnly = isSelf || isMcpClaude;
+    var readOnlyTitle = isSelf
+      ? 'This is macmon itself — stopping it will close the dashboard'
+      : 'Managed by Claude Code — cannot be stopped independently';
+    var toggleHtml = isReadOnly
+      ? '<button class="toggle" role="switch" aria-checked="' + s.running + '" disabled title="' + readOnlyTitle + '" style="opacity:0.4;cursor:not-allowed;"></button>'
+      : '<button class="toggle" role="switch" aria-checked="' + s.running + '" data-svc-name="' + s.name + '" data-svc-running="' + s.running + '" aria-label="Toggle ' + s.name + '"></button>';
+    var warningBadge = isSelf
+      ? ' <span style="font-family:var(--f-mono);font-size:9.5px;color:var(--warn);background:var(--warn-soft);padding:1px 5px;border-radius:4px;border:1px solid rgba(245,158,11,0.3);">this dashboard</span>'
+      : isMcpClaude
+      ? ' <span style="font-family:var(--f-mono);font-size:9.5px;color:var(--text-dim);background:var(--bg-elev-2);padding:1px 5px;border-radius:4px;border:1px solid var(--border);">claude code</span>'
+      : '';
+    return '<div class="row svc">' +
+      '<div class="svc__icon">' + letter + '</div>' +
+      '<div class="svc__info">' +
+      '<div class="svc__name">' + s.name + warningBadge + '</div>' +
+      '<div class="svc__path">' + s.type + ' · ' + (s.running ? 'up ' + uptime : 'stopped') + '</div></div>' +
+      '<span class="pill ' + (s.running ? 'pill--ok' : 'pill--muted') + '" style="min-width:62px;justify-content:center;">' +
+      '<span class="pill__dot"></span>' + (s.running ? 'running' : 'stopped') + '</span>' +
+      '<div class="svc__mem">' + (s.running ? '<strong>' + s.memory_mb + '</strong> MB' : '—') + '</div>' +
+      toggleHtml +
+      '</div>';
+  }).join('');
+}
+
+function renderProcesses(processes) {
+  var sorted = processes.slice().sort(function(a,b){ return _procSort === 'cpu' ? b.cpu_percent - a.cpu_percent : b.memory_mb - a.memory_mb; }).slice(0,10);
+  document.getElementById('proc-list').innerHTML = sorted.map(function(p) {
+    var cpuCls = p.cpu_percent >= 30 ? 'proc__num--crit' : p.cpu_percent >= 15 ? 'proc__num--warn' : '';
+    var memStr = p.memory_mb >= 1024 ? (p.memory_mb/1024).toFixed(1) + ' GB' : p.memory_mb + ' MB';
+    var nm = p.name.toLowerCase();
+    var tag = (nm.includes('node') || nm.includes('python') || nm.includes('mongo') || nm.includes('postgres') || nm.includes('nest')) ? 'dev'
+            : (nm.includes('chrome') || nm.includes('safari') || nm.includes('whatsapp') || nm.includes('slack') || nm.includes('figma')) ? 'app' : 'sys';
+    return '<div class="row proc">' +
+      '<div class="proc__pid">' + p.pid + '</div>' +
+      '<div class="proc__name"><span class="proc__app">' + p.name + '</span><span class="proc__tag">' + tag + '</span></div>' +
+      '<div class="proc__num ' + cpuCls + '">' + p.cpu_percent.toFixed(1) + '%</div>' +
+      '<div class="proc__num proc__num--muted">' + memStr + '</div>' +
+      '<button class="kill" data-pid="' + p.pid + '" title="Kill PID ' + p.pid + '"><svg><use href="#i-x"/></svg></button>' +
+      '</div>';
+  }).join('');
+}
+
+function renderRecs(recs) {
+  document.getElementById('rec-count').textContent = recs.length;
+  if (recs.length === 0) {
+    document.getElementById('rec-list').innerHTML = '<div style="padding:32px 16px;text-align:center;color:var(--text-muted);font-size:12.5px;"><div style="font-size:20px;margin-bottom:6px;color:var(--ok);" class="mono">&#10003;</div>Nothing to optimize. System looks great.</div>';
+    return;
+  }
+  document.getElementById('rec-list').innerHTML = recs.map(function(r) {
+    var icon = r.priority === 'high' ? 'bolt' : 'info';
+    var canExec = r.action && r.action !== 'none';
+    return '<div class="rec rec--' + r.priority + '">' +
+      '<div class="rec__prio"><svg><use href="#i-' + icon + '"/></svg></div>' +
+      '<div class="rec__body">' +
+      '<div class="rec__row1"><span class="rec__title">' + r.title + '</span><span class="rec__badge">' + r.priority + '</span></div>' +
+      '<div class="rec__desc">' + r.description + '</div>' +
+      '<div class="rec__actions">' +
+      (canExec ? '<button class="btn btn--primary" data-action="' + r.action + '" data-target="' + (r.target||'') + '" data-id="' + r.id + '">Execute</button>'
+               : '<span style="font-size:11.5px;color:var(--text-muted);">Manual action required</span>') +
+      '</div></div></div>';
+  }).join('');
+}
+
+function renderAll(d) {
+  _data = d;
+  renderPill(d);
+  renderAlert(d);
+  renderServices(d.services);
+  renderProcesses(d.processes);
+  renderRecs(d.recommendations);
+  document.querySelectorAll('.metric').length === 4 ? updateGaugesInPlace(d) : renderMetrics(d);
+}
+
+function updateClock() {
+  var now = new Date();
+  document.getElementById('timestamp').textContent =
+    String(now.getHours()).padStart(2,'0') + ':' +
+    String(now.getMinutes()).padStart(2,'0') + ':' +
+    String(now.getSeconds()).padStart(2,'0');
+}
+
+function toast(msg, type) {
+  var el = document.createElement('div');
+  el.className = 'toast' + (type === 'err' ? ' toast--err' : '');
+  el.textContent = msg;
+  document.getElementById('toast-wrap').appendChild(el);
+  setTimeout(function(){ el.remove(); }, 3500);
+}
+
+async function apiCall(url, label, refreshDelay) {
+  try {
+    var res = await fetch(url, {method:'POST'});
+    var json = await res.json();
+    toast(json.message || (json.success ? label + ' succeeded' : label + ' failed'), json.success ? 'ok' : 'err');
+    if (json.success) {
+      // Refresh dashboard after action — with optional delay for slow operations like purge
+      setTimeout(forceRefresh, refreshDelay || 1000);
+    }
+  } catch(e) { toast('Error: ' + e.message, 'err'); }
+}
+
+async function forceRefresh() {
+  try {
+    var res = await fetch(API_URL + '/api/snapshot');
+    var d = await res.json();
+    renderAll(d);
+  } catch(e) {}
+}
+
+function wireEvents() {
+  document.getElementById('svc-list').addEventListener('click', async function(e) {
+    var btn = e.target.closest('.toggle');
+    if (!btn) return;
+    var name = btn.dataset.svcName, running = btn.dataset.svcRunning === 'true';
+    btn.disabled = true;
+    await apiCall(API_URL + '/api/service/' + encodeURIComponent(name) + '/' + (running ? 'stop' : 'start'), (running?'Stop':'Start') + ' ' + name, 1500);
+    btn.disabled = false;
+  });
+
+  document.getElementById('proc-list').addEventListener('click', async function(e) {
+    var btn = e.target.closest('.kill');
+    if (!btn) return;
+    var pid = btn.dataset.pid;
+    if (!confirm('Kill process ' + pid + '?')) return;
+    var row = btn.closest('.row');
+    row.style.cssText = 'transition:opacity 260ms,transform 260ms;opacity:0;transform:translateX(40px)';
+    setTimeout(function(){ row.remove(); }, 300);
+    await apiCall(API_URL + '/api/process/' + pid + '/kill', 'Kill PID ' + pid);
+  });
+
+  document.getElementById('rec-list').addEventListener('click', async function(e) {
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    var action = btn.dataset.action, target = btn.dataset.target;
+    btn.disabled = true; btn.textContent = 'Running\u2026';
+    var url = action === 'stop_service'
+      ? API_URL + '/api/service/' + encodeURIComponent(target) + '/stop'
+      : API_URL + '/api/action/' + encodeURIComponent(action);
+    // purge needs 4s for memory to settle before re-reading metrics
+    var delay = action === 'purge_memory' ? 4000 : 1500;
+    await apiCall(url, action, delay);
+    btn.textContent = 'Done';
+  });
+
+  document.querySelectorAll('[data-sort]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('[data-sort]').forEach(function(b){ b.setAttribute('aria-pressed','false'); });
+      btn.setAttribute('aria-pressed','true');
+      _procSort = btn.dataset.sort;
+      document.getElementById('proc-sort-label').textContent = 'by ' + _procSort;
+      if (_data) renderProcesses(_data.processes);
+    });
+  });
+
+  document.querySelectorAll('[data-filter]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('[data-filter]').forEach(function(b){ b.setAttribute('aria-pressed','false'); });
+      btn.setAttribute('aria-pressed','true');
+      _svcFilter = btn.dataset.filter;
+      if (_data) renderServices(_data.services);
+    });
+  });
+
+  document.getElementById('alert-close').addEventListener('click', function() {
+    _alertDismissed = true;
+    document.getElementById('alert').hidden = true;
+  });
+
+  document.getElementById('alert-cta').addEventListener('click', function() {
+    document.getElementById('rec-list').scrollIntoView({behavior:'smooth'});
+  });
+
+  document.getElementById('theme-btn').addEventListener('click', function() {
+    _theme = _theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', _theme);
+    localStorage.setItem('macmon-theme', _theme);
+  });
+}
+
+function connectWS() {
+  var ws = new WebSocket(WS_URL);
+  ws.onopen = function() {
+    document.getElementById('connecting').classList.add('hidden');
+    document.getElementById('hdr-ts').classList.remove('disconnected');
+  };
+  ws.onmessage = function(e) {
+    try { renderAll(JSON.parse(e.data)); } catch(_) {}
+  };
+  ws.onclose = function() {
+    document.getElementById('hdr-ts').classList.add('disconnected');
+    document.getElementById('global-pill').className = 'pill pill--muted';
+    document.getElementById('global-pill-label').textContent = 'Disconnected';
+    setTimeout(connectWS, 3000);
+  };
+  ws.onerror = function() { ws.close(); };
+}
+
+document.documentElement.setAttribute('data-theme', _theme);
+wireEvents();
+connectWS();
+updateClock();
+setInterval(updateClock, 1000);
+</script>
+</body>
+</html>
