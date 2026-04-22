@@ -11,6 +11,21 @@ PIDFILE = Path.home() / ".macmon.pid"
 LOGFILE = Path.home() / ".macmon.log"
 
 
+def _check_for_update() -> None:
+    """Print a notice if a newer version is available on PyPI. Silent on any failure."""
+    try:
+        import urllib.request, json
+        from macmon import __version__
+        url = "https://pypi.org/pypi/macmon/json"
+        with urllib.request.urlopen(url, timeout=3) as r:
+            latest = json.loads(r.read())["info"]["version"]
+        if latest != __version__:
+            print(f"  ⚠ Update available: v{latest} (you have v{__version__})")
+            print(f"  → Run: pip3 install --upgrade macmon")
+    except Exception:
+        pass
+
+
 def _is_running() -> tuple[bool, int]:
     if not PIDFILE.exists():
         return False, 0
@@ -27,6 +42,7 @@ def cmd_start(port: int, no_browser: bool):
     running, pid = _is_running()
     if running:
         print(f"macmon is already running (PID {pid}) → http://localhost:{port}")
+        _check_for_update()
         if not no_browser:
             subprocess.run(["open", f"http://localhost:{port}"])
         return
@@ -44,6 +60,7 @@ def cmd_start(port: int, no_browser: bool):
     running, _ = _is_running()
     if running:
         print(f"macmon running (PID {proc.pid})")
+        _check_for_update()
         if not no_browser:
             subprocess.run(["open", f"http://localhost:{port}"])
     else:
