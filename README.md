@@ -137,6 +137,7 @@ The address is **http://localhost:9999** — this is like a website, but it only
 | Open the dashboard (already running) | Go to `http://localhost:9999` in your browser |
 | Stop macmon completely | `macmon stop` |
 | Check if macmon is running | `macmon status` |
+| Update to the latest version | `pip3 install --upgrade macmon` |
 | View logs (for troubleshooting) | `macmon logs` |
 | Start on a different port | `macmon start --port 8080` |
 
@@ -144,9 +145,21 @@ The address is **http://localhost:9999** — this is like a website, but it only
 
 **macmon runs in the background** — you can close Terminal after `macmon start` and the dashboard keeps working. Use `macmon stop` when you want to shut it down completely.
 
+**Updates:** macmon checks for updates automatically every time you run `macmon start`. If a newer version is available you'll see a notice in Terminal with the exact command to update. After updating, run `macmon stop` then `macmon start` to reload the new version.
+
 ---
 
 ## Troubleshooting
+
+**Still getting notifications after `macmon stop`**
+An older version of macmon had a bug where background processes weren't fully stopped. Update to fix it:
+```
+pip3 install --upgrade macmon
+```
+Then run `macmon stop` again. If notifications persist, force-kill all macmon processes with:
+```
+pkill -f "uvicorn macmon.server"
+```
 
 **`macmon: command not found`**
 Close Terminal fully (Cmd + Q), reopen it, and try again. If that doesn't fix it, run `pip3 install macmon` again.
