@@ -9,11 +9,13 @@ A dashboard that lives in your browser and tells you exactly what your Mac is do
 ## Quick install
 
 ```bash
-pip install macmon
+pip3 install macmon
 macmon start
 ```
 
 Browser opens automatically. Done.
+
+> `pip3` and `pip` are the same thing on modern Macs — both install Python 3 packages. Use whichever works on your system.
 
 > **New to this?** Skip to the [step-by-step install guide](#step-by-step-install-for-everyone) below.
 
@@ -21,7 +23,7 @@ Browser opens automatically. Done.
 ```bash
 git clone https://github.com/jagangirisaballa/macmon.git
 cd macmon
-pip install -e .
+pip3 install -e .
 ```
 
 ---
