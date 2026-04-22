@@ -151,6 +151,12 @@ The address is **http://localhost:9999** — this is like a website, but it only
 **`macmon: command not found`**
 Close Terminal fully (Cmd + Q), reopen it, and try again. If that doesn't fix it, run `pip3 install macmon` again.
 
+**`error: externally-managed-environment`**
+Your Mac is blocking the install to protect its system Python. Run this instead:
+```
+pip3 install macmon --break-system-packages
+```
+
 **Browser doesn't open automatically**
 Open your browser manually and go to `http://localhost:9999`. If that shows nothing, run `macmon stop` then `macmon start`.
 
