@@ -116,6 +116,12 @@ async def api_restart(port: int = 9999):
     return JSONResponse({"success": True, "message": "Server restarting", "new_pid": new_pid})
 
 
+@app.post("/api/shutdown")
+async def api_shutdown():
+    asyncio.get_event_loop().call_later(0.3, lambda: os.kill(os.getpid(), signal.SIGTERM))
+    return JSONResponse({"success": True, "message": "macmon stopped"})
+
+
 async def broadcast_loop():
     while True:
         try:

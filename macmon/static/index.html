@@ -227,6 +227,11 @@
           <path d="M13.5 8.8a5 5 0 1 1-6.3-6.3 4 4 0 0 0 6.3 6.3Z" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
+      <button class="hdr__iconbtn" id="stop-btn" title="Stop macmon">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor" stroke="none"/>
+        </svg>
+      </button>
       <button class="hdr__iconbtn" id="restart-btn" title="Restart server">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M13 8A5 5 0 1 1 9 3.07" stroke-linecap="round"/>
@@ -642,6 +647,17 @@ function connectWS() {
   };
   ws.onerror = function() { ws.close(); };
 }
+
+document.getElementById('stop-btn').addEventListener('click', async function() {
+  if (!confirm('Stop macmon? The dashboard will close. Run "macmon start" to open it again.')) return;
+  try { await fetch(API_URL + '/api/shutdown', {method:'POST'}); } catch(_) {}
+  document.getElementById('hdr-ts').classList.add('disconnected');
+  document.getElementById('global-pill').className = 'pill pill--muted';
+  document.getElementById('global-pill-label').textContent = 'Stopped';
+  document.getElementById('connecting').classList.remove('hidden');
+  document.getElementById('connecting').querySelector('.sub').textContent = 'macmon stopped. Run "macmon start" to reopen.';
+  document.getElementById('connecting').querySelector('.spinner').style.display = 'none';
+});
 
 document.getElementById('restart-btn').addEventListener('click', async function() {
   if (!confirm('Restart the macmon server? The page will reload automatically when it is back up.')) return;
