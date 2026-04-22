@@ -152,3 +152,56 @@ Each step audited against plan before being logged.
 ### Pending (carried to next session)
 - Push to GitHub (repo not yet created — create at github.com/jagangirisaballa/macmon first)
 - H-01, H-02, H-03, M-01 through M-05, L-01 through L-03 — all deferred to v1.1
+
+---
+
+## 2026-04-22 (session 3) — Branch: main — Version: 1.1.3
+
+### Done
+- Full audit of all Phase 1 + Phase 2 changes — 4 issues found and fixed (mcp-claude dead code in pidTypes, _find_pids_by_pattern dead code, unused pname variable, double blank line)
+- README completely rewritten — structured for both developers and non-developers
+- CR-003: Tagged v1.0.0 and created GitHub Release (manual — user did in browser)
+- CR-004: Dashboard screenshot taken, saved to docs/screenshot.png, added to README
+- CR-005: PyPI account created, macmon published — `pip3 install macmon` now works
+- CR-006: All 6 v1.1 bugs fixed (M-01 page size, M-02 CPU%, M-03 payload guard, M-04 kill button, L-01 launchctl syntax, L-02 Homebrew missing warning)
+- CR-007: GitHub Actions release workflow — tag push now auto-publishes to PyPI + creates GitHub Release
+- CR-008: Stop button added to dashboard header — `/api/shutdown` endpoint added to server.py
+- CR-009 (critical): Fixed macmon stop — was only killing PID file process, leaving orphans running and sending notifications after stop. Now scans all uvicorn macmon.server processes and kills them all.
+- CR-010: Update check on `macmon start` — prints notice + upgrade command if newer version on PyPI
+- README troubleshooting updated — notification bug, update command, externally-managed-environment error
+- LinkedIn post published — https://www.linkedin.com/posts/jagan-girisaballa_opensource-buildinpublic-developertools-share-7452610562791841792-w2qx
+- Verified `pip3 install macmon` works end-to-end in a fresh venv
+- All versions bumped and published: 1.0.0 → 1.1.0 → 1.1.1 → 1.1.2 → 1.1.3
+
+### Bugs Fixed
+- M-01: Compressed memory page size hardcoded — now read dynamically from vm_stat header
+- M-02: CPU% always 0.0 — psutil baseline seeded at module load
+- M-03: Frontend silent stop on malformed payload — shape guard added before renderAll
+- M-04: Kill button removes row before API confirms — now waits for success response
+- L-01: launchctl legacy syntax — migrated to bootout/bootstrap with gui/{uid} domain
+- L-02: Homebrew missing = blank panel — shows "Homebrew not found" warning entry
+- M-05 (partial): macmon stop PID file mismatch — full process scan now used (CR-009)
+- Audit finds: mcp-claude in pidTypes dead code, _find_pids_by_pattern dead code, unused pname in Python scanner, double blank line in server.py — all removed
+
+### Files Touched
+- `macmon/metrics.py` — M-01, M-02, M-03, L-02, import re/shutil added
+- `macmon/actions.py` — L-01 launchctl syntax, import os added, dead code removed
+- `macmon/server.py` — CR-008 shutdown endpoint, version bumps
+- `macmon/cli.py` — CR-009 full process scan stop, CR-010 update check
+- `macmon/static/index.html` — M-04 kill button fix, stop button, version bumps
+- `macmon/__init__.py` — version bumps
+- `pyproject.toml` — version bumps
+- `README.md` — full rewrite + pip install + troubleshooting + update docs
+- `docs/screenshot.png` — created
+- `docs/backlog/active.md` — all CRs and bugs updated
+- `docs/backlog/full.md` — CR-007 through CR-010 specs added
+- `docs/session-log.md` — this entry
+- `.github/workflows/release.yml` — created
+
+### Pending (carried to next session)
+- H-01: Service control model incomplete — login-item, app, python, system types
+- H-02: No error handling for missing tools or timeouts in actions.py
+- H-03: Event loop blocked by synchronous metrics collection
+- L-03: Frontend hardcodes http:// and ws:// — breaks behind HTTPS proxy
+- Monitor LinkedIn post for feature requests / bug reports and log as CRs
+- Consider pipx as recommended install path (cleaner than --break-system-packages)

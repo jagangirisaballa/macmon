@@ -2,7 +2,60 @@
 
 ---
 
-## CR-001: Pre-publish fixes — COMPLETED 2026-04-22
+## CR-007 — GitHub Actions automated release workflow — COMPLETED 2026-04-22
+
+**Goal:** Automate PyPI publish + GitHub Release on every version tag push.
+**File:** `.github/workflows/release.yml`
+**Trigger:** Push of any `v*` tag
+**Steps:** checkout → build → twine upload (skips if version already on PyPI) → softprops/action-gh-release
+**Secret required:** `PYPI_TOKEN` in GitHub repo secrets (project-scoped PyPI API token)
+**Usage:** `git tag vX.Y.Z && git push origin vX.Y.Z` — everything else is automatic.
+
+---
+
+## CR-008 — Stop button in dashboard header — COMPLETED 2026-04-22
+
+**Goal:** Allow users to stop macmon from the browser without going back to Terminal.
+**Files:** `macmon/server.py`, `macmon/static/index.html`
+**Backend:** Added `POST /api/shutdown` — sends SIGTERM to own PID after 0.3s delay.
+**Frontend:** Square stop icon button (⏹) added left of restart button. On click: confirmation dialog,
+POST /api/shutdown, shows "macmon stopped. Run macmon start to reopen." overlay.
+
+---
+
+## CR-009 — macmon stop kills all processes — COMPLETED 2026-04-22
+
+**Goal:** Fix critical bug where `macmon stop` left orphan processes running (sending notifications,
+consuming RAM) because it only killed the PID in `~/.macmon.pid`.
+**File:** `macmon/cli.py`
+**Root cause:** Dashboard restart spawns a new uvicorn process and updates the PID file, but the old
+process could remain. Any mismatch between PID file and actual process left macmon running silently.
+**Fix:** Added `_find_macmon_pids()` that scans all processes for `uvicorn macmon.server` in cmdline.
+`cmd_stop()` now kills ALL matching processes regardless of PID file state. `cmd_status` uses same scan.
+**Nuclear fallback always works:** `pkill -f "uvicorn macmon.server"`
+
+---
+
+## CR-010 — Update check on macmon start — COMPLETED 2026-04-22
+
+**Goal:** Users on old versions get notified of updates automatically — especially important after the
+CR-009 bug fix where users on v1.1.1 or earlier have the orphan-process bug.
+**File:** `macmon/cli.py`
+**Implementation:** `_check_for_update()` — hits `https://pypi.org/pypi/macmon/json`, compares latest
+version to `macmon.__version__`, prints one-line notice with exact upgrade command. 3s timeout.
+Silent on any failure (no internet, timeout, etc). Called after successful start and when already running.
+**Output when outdated:**
+  ⚠ Update available: v1.1.3 (you have v1.0.0)
+  → Run: pip3 install --upgrade macmon
+
+---
+
+## CR-002: Phase 2 — Universal auto-discovery — COMPLETED 2026-04-22
+
+**Priority:** High
+**Status:** Closed
+
+### Change 1 — CR-001: Pre-publish fixes — COMPLETED 2026-04-22
 
 **Priority:** High
 **Status:** Closed — all items fixed
