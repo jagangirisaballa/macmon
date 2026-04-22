@@ -1,3 +1,4 @@
+import os
 import subprocess
 import psutil
 from pathlib import Path
@@ -38,13 +39,13 @@ def stop_service(name: str) -> dict[str, Any]:
 
     if name in _LAUNCH_AGENTS:
         info = _LAUNCH_AGENTS[name]
-        # unload disables the agent properly — stop alone just restarts it
+        domain = f"gui/{os.getuid()}"
         result = subprocess.run(
-            ["launchctl", "unload", info["plist"]],
+            ["launchctl", "bootout", domain, info["plist"]],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0:
-            return {"success": True, "message": f"{name} stopped (unloaded — will not restart)"}
+            return {"success": True, "message": f"{name} stopped"}
         return {"success": False, "message": result.stderr.strip() or f"Could not stop {name}"}
 
     return {"success": False, "message": f"Unknown service: {name}"}
@@ -61,8 +62,9 @@ def start_service(name: str) -> dict[str, Any]:
         return {"success": success, "message": result.stdout.strip() or result.stderr.strip()}
     if name in _LAUNCH_AGENTS:
         info = _LAUNCH_AGENTS[name]
+        domain = f"gui/{os.getuid()}"
         result = subprocess.run(
-            ["launchctl", "load", info["plist"]],
+            ["launchctl", "bootstrap", domain, info["plist"]],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0:

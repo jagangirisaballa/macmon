@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import shutil
 import psutil
 import subprocess
 import time
@@ -26,10 +28,15 @@ def _get_memory() -> dict[str, Any]:
     compressed_gb = 0.0
     try:
         out = subprocess.check_output(["vm_stat"], text=True)
+        page_size = 16384  # default — overridden by vm_stat header if present
         for line in out.splitlines():
+            if "page size of" in line:
+                m = re.search(r"page size of (\d+)", line)
+                if m:
+                    page_size = int(m.group(1))
             if "stored in compressor" in line:
                 pages = int(line.split(":")[1].strip().rstrip("."))
-                compressed_gb = round(pages * 16384 / 1e9, 2)
+                compressed_gb = round(pages * page_size / 1e9, 2)
                 break
     except Exception:
         pass
@@ -64,6 +71,14 @@ def _get_disk() -> dict[str, Any]:
 # macmon's own PID — shown but flagged as self so UI can warn
 _OWN_PID = os.getpid()
 
+# Seed psutil's per-process CPU% baseline — without this the first call always returns 0.0
+psutil.cpu_percent(interval=None)
+for _p in psutil.process_iter(["cpu_percent"]):
+    try:
+        _p.cpu_percent(interval=None)
+    except Exception:
+        pass
+
 _KNOWN_SERVICES_FILE = Path.home() / ".macmon_known_services"
 
 def _load_known_services() -> set[str]:
@@ -81,8 +96,10 @@ def _save_known_services(names: set[str]) -> None:
 _seen_service_names: set[str] = _load_known_services()
 
 
-def _get_brew_services() -> dict[str, str]:
-    """Returns {brew_name: status} for all installed Homebrew services."""
+def _get_brew_services() -> tuple[dict[str, str], bool]:
+    """Returns ({brew_name: status}, homebrew_available)."""
+    if not shutil.which("brew"):
+        return {}, False
     try:
         out = subprocess.check_output(["brew", "services", "list"], text=True, timeout=10)
         result = {}
@@ -90,9 +107,9 @@ def _get_brew_services() -> dict[str, str]:
             parts = line.split()
             if parts:
                 result[parts[0]] = parts[1] if len(parts) > 1 else "none"
-        return result
+        return result, True
     except Exception:
-        return {}
+        return {}, True  # brew exists but call failed — don't show the warning
 
 
 def _get_launch_agents() -> dict[str, str]:
@@ -134,7 +151,13 @@ def _get_services() -> list[dict[str, Any]]:
         return None
 
     # 1. Homebrew services — full list including stopped
-    brew_all = _get_brew_services()
+    brew_all, brew_available = _get_brew_services()
+    if not brew_available:
+        services.append({
+            "name": "Homebrew not found", "type": "warning", "pid": None,
+            "running": False, "cpu_percent": 0.0, "memory_mb": 0.0,
+            "uptime_minutes": None, "is_self": False,
+        })
     _BREW_DISPLAY = {
         "mongodb-community": "MongoDB",
         "postgresql@15": "PostgreSQL",

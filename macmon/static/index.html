@@ -555,9 +555,19 @@ function wireEvents() {
     var pid = btn.dataset.pid;
     if (!confirm('Kill process ' + pid + '?')) return;
     var row = btn.closest('.row');
-    row.style.cssText = 'transition:opacity 260ms,transform 260ms;opacity:0;transform:translateX(40px)';
-    setTimeout(function(){ row.remove(); }, 300);
-    await apiCall(API_URL + '/api/process/' + pid + '/kill', 'Kill PID ' + pid);
+    btn.disabled = true;
+    try {
+      var res = await fetch(API_URL + '/api/process/' + pid + '/kill', {method:'POST'});
+      var json = await res.json();
+      toast(json.message || (json.success ? 'Killed PID ' + pid : 'Kill failed'), json.success ? 'ok' : 'err');
+      if (json.success) {
+        row.style.cssText = 'transition:opacity 260ms,transform 260ms;opacity:0;transform:translateX(40px)';
+        setTimeout(function(){ row.remove(); }, 300);
+        setTimeout(forceRefresh, 1000);
+      } else {
+        btn.disabled = false;
+      }
+    } catch(e) { toast('Error: ' + e.message, 'err'); btn.disabled = false; }
   });
 
   document.getElementById('rec-list').addEventListener('click', async function(e) {
@@ -618,7 +628,11 @@ function connectWS() {
     document.getElementById('hdr-ts').classList.remove('disconnected');
   };
   ws.onmessage = function(e) {
-    try { renderAll(JSON.parse(e.data)); } catch(_) {}
+    try {
+      var d = JSON.parse(e.data);
+      if (!d || !d.status || !d.services) return; // guard against partial payloads
+      renderAll(d);
+    } catch(_) {}
   };
   ws.onclose = function() {
     document.getElementById('hdr-ts').classList.add('disconnected');
