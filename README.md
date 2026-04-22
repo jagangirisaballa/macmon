@@ -2,6 +2,8 @@
 
 A dashboard that lives in your browser and tells you exactly what your Mac is doing — and what to do when it slows down. Runs locally. No account. No internet. Nothing leaves your machine.
 
+![macmon dashboard](docs/screenshot.png)
+
 ---
 
 ## Quick install (for developers)
