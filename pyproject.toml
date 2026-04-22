@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=61.0"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "macmon"
@@ -34,9 +34,9 @@ dependencies = [
 macmon = "macmon.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/jagang/macmon"
-Repository = "https://github.com/jagang/macmon"
-Issues = "https://github.com/jagang/macmon/issues"
+Homepage = "https://github.com/jagangirisaballa/macmon"
+Repository = "https://github.com/jagangirisaballa/macmon"
+Issues = "https://github.com/jagangirisaballa/macmon/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -192,7 +192,6 @@ def _get_services() -> list[dict[str, Any]]:
 
     # 2. LaunchAgents — user-installed background agents
     _AGENT_DISPLAY = {
-        "com.clawdbot.gateway": ("clawdbot", ["clawdbot"]),
         "com.openai.atlas.update-helper": ("OpenAI Atlas", ["atlas"]),
     }
     launch_agents = _get_launch_agents()
@@ -218,10 +217,6 @@ def _get_services() -> list[dict[str, Any]]:
 
     # 3. Well-known dev processes not covered above
     _DEV_PATTERNS = [
-        ("NestJS B2B", "node", ["nest start", "b2b_server"]),
-        ("MCP Supabase", "mcp-claude", ["mcp-server-supabase"]),
-        ("MCP Analytics", "mcp-claude", ["mcp-google-analytics"]),
-        ("MCP Search Console", "mcp-claude", ["mcp-gsc"]),
         ("macmon", "self", ["uvicorn macmon.server"]),
     ]
     for display_name, svc_type, patterns in _DEV_PATTERNS:
@@ -361,7 +356,7 @@ def _get_recommendations(memory: dict, swap: dict, services: list, processes: li
         })
 
     # MCP servers
-    mcp_services = [s for s in services if s["type"] == "mcp" and s["running"]]
+    mcp_services = [s for s in services if s["type"] == "mcp-claude" and s["running"]]
     mcp_total = sum(s["memory_mb"] for s in mcp_services)
     if mcp_total > 50:
         recs.append({

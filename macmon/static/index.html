@@ -4,9 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>macmon — System Monitor</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg:#0A0A0A;--bg-elev-1:#0F0F0F;--bg-elev-2:#141414;--bg-hover:#1A1A1A;
@@ -16,8 +13,8 @@
     --ok:#22C55E;--ok-soft:rgba(34,197,94,0.12);
     --warn:#F59E0B;--warn-soft:rgba(245,158,11,0.14);
     --crit:#EF4444;--crit-soft:rgba(239,68,68,0.14);
-    --f-sans:'Geist',-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif;
-    --f-mono:'Geist Mono','SF Mono',ui-monospace,monospace;
+    --f-sans:-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif;
+    --f-mono:'SF Mono',ui-monospace,monospace;
     --r-sm:6px;--r-md:10px;--r-lg:14px;--r-pill:999px;
     --sh-1:0 1px 0 0 rgba(255,255,255,0.03) inset,0 1px 2px rgba(0,0,0,0.4);
     --ease:cubic-bezier(0.22,1,0.36,1);
@@ -176,6 +173,7 @@
   @keyframes popIn{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
   #connecting{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:500}
   #connecting.hidden{display:none}
+  .hidden{display:none!important}
   #connecting .logo{font-family:var(--f-mono);font-size:28px;font-weight:600;letter-spacing:-0.03em;color:var(--text)}
   #connecting .sub{font-family:var(--f-mono);font-size:12px;color:var(--text-muted)}
   .spinner{width:20px;height:20px;border:2px solid var(--border-strong);border-top-color:var(--ok);border-radius:50%;animation:spin .8s linear infinite}
@@ -195,6 +193,12 @@
   <div class="logo">macmon</div>
   <div class="spinner"></div>
   <div class="sub">connecting to localhost:9999…</div>
+</div>
+
+<div id="restart-overlay" class="hidden" style="position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:600">
+  <div style="font-family:var(--f-mono);font-size:28px;font-weight:600;letter-spacing:-0.03em;color:var(--text)">macmon</div>
+  <div class="spinner"></div>
+  <div style="font-family:var(--f-mono);font-size:12px;color:var(--text-muted)" id="restart-sub">Restarting server…</div>
 </div>
 
 <div class="app">
@@ -221,6 +225,12 @@
       <button class="hdr__iconbtn" id="theme-btn" title="Toggle theme">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M13.5 8.8a5 5 0 1 1-6.3-6.3 4 4 0 0 0 6.3 6.3Z" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="hdr__iconbtn" id="restart-btn" title="Restart server">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M13 8A5 5 0 1 1 9 3.07" stroke-linecap="round"/>
+          <path d="M9 1v3h3" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
     </div>
@@ -608,6 +618,25 @@ function connectWS() {
   };
   ws.onerror = function() { ws.close(); };
 }
+
+document.getElementById('restart-btn').addEventListener('click', async function() {
+  if (!confirm('Restart the macmon server? The page will reload automatically when it is back up.')) return;
+  document.getElementById('restart-overlay').classList.remove('hidden');
+  try { await fetch(API_URL + '/api/restart', {method:'POST'}); } catch(_) {}
+  var attempts = 0;
+  var iv = setInterval(async function() {
+    attempts++;
+    try {
+      var res = await fetch(API_URL + '/api/snapshot');
+      if (res.ok) { clearInterval(iv); location.reload(); return; }
+    } catch(_) {}
+    if (attempts >= 40) {
+      clearInterval(iv);
+      document.getElementById('restart-sub').textContent = 'Server did not come back up. Run: python3 -m uvicorn macmon.server:app --host 127.0.0.1 --port 9999';
+    }
+  }, 750);
+});
+
 
 document.documentElement.setAttribute('data-theme', _theme);
 wireEvents();

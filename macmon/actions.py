@@ -1,6 +1,5 @@
 import subprocess
 import psutil
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -9,24 +8,16 @@ _HOMEBREW_SERVICES = {
     "MongoDB": "mongodb-community",
     "PostgreSQL": "postgresql@15",
     "Redis": "redis",
-}
-
-_NODE_PATTERNS = {
-    "NestJS B2B": ["nest start", "b2b_server"],
-    "NestJS dist": ["b2b_server/dist"],
-}
-
-_PYTHON_PATTERNS = {
-    "Python FastAPI": ["uvicorn"],
-    "Python server": ["uvicorn", "python"],
+    "Dolt": "dolt",
+    "PHP": "php",
+    "OpenVPN": "openvpn",
+    "Unbound": "unbound",
+    "Nginx": "nginx",
+    "MySQL": "mysql",
 }
 
 # LaunchAgent services — label + plist path for proper unload/load
 _LAUNCH_AGENTS = {
-    "clawdbot": {
-        "label": "com.clawdbot.gateway",
-        "plist": str(Path.home() / "Library/LaunchAgents/com.clawdbot.gateway.plist"),
-    },
     "OpenAI Atlas": {
         "label": "com.openai.atlas.update-helper",
         "plist": str(Path.home() / "Library/LaunchAgents/com.openai.atlas.update-helper.plist"),
@@ -67,34 +58,6 @@ def stop_service(name: str) -> dict[str, Any]:
         if result.returncode == 0:
             return {"success": True, "message": f"{name} stopped (unloaded — will not restart)"}
         return {"success": False, "message": result.stderr.strip() or f"Could not stop {name}"}
-
-    patterns = _NODE_PATTERNS.get(name) or _PYTHON_PATTERNS.get(name)
-    if patterns:
-        pids = _find_pids_by_pattern(patterns)
-        if not pids:
-            return {"success": False, "message": f"No running process found for {name}"}
-        killed = []
-        for pid in pids:
-            try:
-                proc = psutil.Process(pid)
-                proc.terminate()
-                proc.wait(timeout=5)
-                killed.append(pid)
-            except (psutil.NoSuchProcess, psutil.TimeoutExpired, psutil.AccessDenied):
-                pass
-        return {"success": bool(killed), "message": f"Stopped PIDs: {killed}" if killed else "Could not stop process"}
-
-    # Last resort — find by name pattern and terminate
-    pids = _find_pids_by_pattern([name.lower()])
-    if pids:
-        killed = []
-        for pid in pids:
-            try:
-                psutil.Process(pid).terminate()
-                killed.append(pid)
-            except Exception:
-                pass
-        return {"success": bool(killed), "message": f"Stopped {name}" if killed else f"Could not stop {name}"}
 
     return {"success": False, "message": f"Unknown service: {name}"}
 

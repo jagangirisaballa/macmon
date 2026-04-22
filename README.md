@@ -2,8 +2,6 @@
 
 > Real-time Mac system monitoring dashboard with smart optimization recommendations.
 
-![macmon dashboard](https://raw.githubusercontent.com/jagang/macmon/main/screenshot.png)
-
 ## Features
 
 - **Live metrics** — CPU, RAM, swap, disk updated every 2 seconds
@@ -17,16 +15,12 @@
 ## Install
 
 ```bash
-pip install macmon
-```
-
-Or install from source:
-
-```bash
-git clone https://github.com/jagang/macmon.git
+git clone https://github.com/jagangirisaballa/macmon.git
 cd macmon
 pip install -e .
 ```
+
+> PyPI release coming soon — `pip install macmon` will work once published.
 
 **Optional: native notifications**
 

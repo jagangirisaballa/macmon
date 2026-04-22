@@ -33,7 +33,7 @@ def cmd_start(port: int, no_browser: bool):
 
     print(f"Starting macmon on http://localhost:{port} ...")
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "macmon.server:app", "--host", "0.0.0.0", "--port", str(port), "--log-level", "warning"],
+        [sys.executable, "-m", "uvicorn", "macmon.server:app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
         stdout=open(LOGFILE, "w"),
         stderr=subprocess.STDOUT,
         start_new_session=True,
