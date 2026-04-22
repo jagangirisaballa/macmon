@@ -298,8 +298,8 @@
   <footer class="ftr">
     <div class="ftr__sys">macmon v1.0.0 · local-only · no telemetry · MIT</div>
     <div class="ftr__links">
-      <a href="https://github.com/jagang/macmon" target="_blank">GitHub ↗</a>
-      <a href="https://github.com/jagang/macmon/issues" target="_blank">Issues</a>
+      <a href="https://github.com/jagangirisaballa/macmon" target="_blank">GitHub ↗</a>
+      <a href="https://github.com/jagangirisaballa/macmon/issues" target="_blank">Issues</a>
     </div>
   </footer>
 </div>
@@ -425,9 +425,11 @@ function renderServices(services) {
     var readOnlyTitle = isSelf
       ? 'This is macmon itself — stopping it will close the dashboard'
       : 'Managed by Claude Code — cannot be stopped independently';
+    var pidTypes = ['node', 'python'];
+    var usesPid = pidTypes.indexOf(s.type) !== -1 && s.pid != null;
     var toggleHtml = isReadOnly
       ? '<button class="toggle" role="switch" aria-checked="' + s.running + '" disabled title="' + readOnlyTitle + '" style="opacity:0.4;cursor:not-allowed;"></button>'
-      : '<button class="toggle" role="switch" aria-checked="' + s.running + '" data-svc-name="' + s.name + '" data-svc-running="' + s.running + '" aria-label="Toggle ' + s.name + '"></button>';
+      : '<button class="toggle" role="switch" aria-checked="' + s.running + '" data-svc-name="' + s.name + '" data-svc-running="' + s.running + '"' + (usesPid ? ' data-svc-pid="' + s.pid + '"' : '') + ' aria-label="Toggle ' + s.name + '"></button>';
     var warningBadge = isSelf
       ? ' <span style="font-family:var(--f-mono);font-size:9.5px;color:var(--warn);background:var(--warn-soft);padding:1px 5px;border-radius:4px;border:1px solid rgba(245,158,11,0.3);">this dashboard</span>'
       : isMcpClaude
@@ -452,8 +454,10 @@ function renderProcesses(processes) {
     var cpuCls = p.cpu_percent >= 30 ? 'proc__num--crit' : p.cpu_percent >= 15 ? 'proc__num--warn' : '';
     var memStr = p.memory_mb >= 1024 ? (p.memory_mb/1024).toFixed(1) + ' GB' : p.memory_mb + ' MB';
     var nm = p.name.toLowerCase();
-    var tag = (nm.includes('node') || nm.includes('python') || nm.includes('mongo') || nm.includes('postgres') || nm.includes('nest')) ? 'dev'
-            : (nm.includes('chrome') || nm.includes('safari') || nm.includes('whatsapp') || nm.includes('slack') || nm.includes('figma')) ? 'app' : 'sys';
+    var devNames = ['node','python','mongo','postgres','nest','bun','deno','uvicorn','gunicorn','ng','vite','nodemon','tsx','redis','mysql','nginx','php'];
+    var appNames = ['chrome','safari','whatsapp','slack','figma','discord','cursor','electron','notion','zoom'];
+    var tag = devNames.some(function(n){return nm.includes(n);}) ? 'dev'
+            : appNames.some(function(n){return nm.includes(n);}) ? 'app' : 'sys';
     return '<div class="row proc">' +
       '<div class="proc__pid">' + p.pid + '</div>' +
       '<div class="proc__name"><span class="proc__app">' + p.name + '</span><span class="proc__tag">' + tag + '</span></div>' +
@@ -536,8 +540,12 @@ function wireEvents() {
     var btn = e.target.closest('.toggle');
     if (!btn) return;
     var name = btn.dataset.svcName, running = btn.dataset.svcRunning === 'true';
+    var pid = btn.dataset.svcPid;
     btn.disabled = true;
-    await apiCall(API_URL + '/api/service/' + encodeURIComponent(name) + '/' + (running ? 'stop' : 'start'), (running?'Stop':'Start') + ' ' + name, 1500);
+    var url = (running && pid)
+      ? API_URL + '/api/service/stop-pid/' + pid
+      : API_URL + '/api/service/' + encodeURIComponent(name) + '/' + (running ? 'stop' : 'start');
+    await apiCall(url, (running?'Stop':'Start') + ' ' + name, 1500);
     btn.disabled = false;
   });
 
@@ -559,6 +567,8 @@ function wireEvents() {
     btn.disabled = true; btn.textContent = 'Running\u2026';
     var url = action === 'stop_service'
       ? API_URL + '/api/service/' + encodeURIComponent(target) + '/stop'
+      : action === 'stop_pid'
+      ? API_URL + '/api/service/stop-pid/' + encodeURIComponent(target)
       : API_URL + '/api/action/' + encodeURIComponent(action);
     // purge needs 4s for memory to settle before re-reading metrics
     var delay = action === 'purge_memory' ? 4000 : 1500;

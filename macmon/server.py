@@ -1,6 +1,9 @@
 import asyncio
 import json
 import os
+import signal
+import subprocess
+import sys
 from pathlib import Path
 from typing import Set
 
@@ -62,6 +65,12 @@ async def api_start_service(name: str):
     return JSONResponse(result)
 
 
+@app.post("/api/service/stop-pid/{pid}")
+async def api_stop_pid(pid: int):
+    result = actions.stop_pid(pid)
+    return JSONResponse(result)
+
+
 @app.post("/api/process/{pid}/kill")
 async def api_kill_process(pid: int):
     result = actions.kill_process(pid)
@@ -81,6 +90,30 @@ async def api_execute_action(action_id: str):
 async def api_snapshot():
     data = metrics.collect()
     return JSONResponse(data)
+
+
+def _spawn_server(port: int):
+    """Spawn a new detached uvicorn process and write its PID to the pidfile."""
+    from pathlib import Path as _Path
+    logfile = _Path.home() / ".macmon.log"
+    pidfile = _Path.home() / ".macmon.pid"
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "macmon.server:app",
+         "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
+        stdout=open(logfile, "w"),
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+        cwd=str(_Path(__file__).parent.parent),
+    )
+    pidfile.write_text(str(proc.pid))
+    return proc.pid
+
+
+@app.post("/api/restart")
+async def api_restart(port: int = 9999):
+    new_pid = _spawn_server(port)
+    asyncio.get_event_loop().call_later(0.5, lambda: os.kill(os.getpid(), signal.SIGTERM))
+    return JSONResponse({"success": True, "message": "Server restarting", "new_pid": new_pid})
 
 
 async def broadcast_loop():

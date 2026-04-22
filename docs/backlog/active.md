@@ -6,7 +6,7 @@ Current version: 1.0.0
 
 | ID | Title | Priority | Status |
 |----|-------|----------|--------|
-| CR-002 | Phase 2 — Universal auto-discovery: Node, MCP, Python server scanning | High | Open |
+| CR-002 | Phase 2 — Universal auto-discovery: Node, MCP, Python server scanning | High | **Done 2026-04-22** |
 
 ## Known Bugs / Issues
 

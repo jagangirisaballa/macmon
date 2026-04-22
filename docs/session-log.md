@@ -78,13 +78,77 @@
 - `.claude/projects/.../memory/plan_prepublish.md` (created)
 
 ### Pending (carried to next session)
-- CR-002: Phase 2 — Universal auto-discovery (Node/Bun/Deno, MCP, Python servers)
-  - Node/Bun/Deno server scanner with display name derivation
-  - MCP server scanner (generic mcp-* process scan)
-  - Python server scanner (uvicorn/gunicorn/flask/django)
-  - PID-based stop in actions.py (replaces named pattern lookup)
-  - Recommendation engine: type-based not name-based
-  - Process tagger: expanded dev list in index.html
-  - MCP recommendation text: remove "Claude Code" reference
+- Push to GitHub (repo not yet created — create at github.com/jagangirisaballa/macmon first)
+- H-01, H-02, H-03, M-01 through M-05, L-01 through L-03 — all deferred to v1.1
+
+---
+
+## 2026-04-22 (session 2) — Branch: main — Version: 1.0.0
+
+### Done — Phase 2 (CR-002): Universal auto-discovery — COMPLETE
+
+Each step audited against plan before being logged.
+
+**Step 1 — Dead code removal:**
+- Deleted orphaned `_SERVICE_PATTERNS` (metrics.py lines 63-74, never used after Phase 1)
+
+**Step 2 — MCP server auto-discovery (metrics.py `_get_services`):**
+- Scans all processes for `/.bin/mcp-` or `/mcp-server-` in cmdline
+- Skips npm exec wrapper processes (only matches real node worker)
+- Derives display name from path segment (e.g. `mcp-server-supabase` → "MCP Supabase")
+- Appends `--project-ref` prefix (8 chars) when multiple instances of same server exist
+- Type: `"mcp-claude"` — consistent with existing frontend/rec checks
+- Audit: confirmed 4 MCP workers discovered (GSC, Google Analytics, 2× Supabase with project-refs)
+
+**Step 3 — Node/Bun/Deno dev server auto-discovery (metrics.py `_get_services`):**
+- Matches processes named `node`, `bun`, `deno`
+- Excludes `/.npm/_npx/` cache paths (MCP wrappers/one-off tools)
+- Requires known dev server signal: `npm start`, `npm run`, `ng serve`, `next`, `vite`, `nest start`, `ts-node`, `nodemon`, `tsx`
+- Skips children whose parent PID is already matched (prevents ng serve showing under npm start)
+- Derives display name from `package.json#name` in process CWD, fallback to script filename
+- Type: `"node"`
+- Audit: confirmed `superGryd` discovered via package.json; ng serve child correctly suppressed
+
+**Step 4 — Python server auto-discovery (metrics.py `_get_services`):**
+- Matches `uvicorn `, `gunicorn `, `flask run`, `manage.py runserver` in cmdline
+- Derives display name from app module arg (e.g. `uvicorn macmon.server:app` → "macmon")
+- Type: `"python"`
+
+**Step 5 — PID-based stop (actions.py + server.py + index.html):**
+- Added `stop_pid(pid)` to actions.py — delegates to `kill_process`
+- Added `POST /api/service/stop-pid/{pid}` route to server.py
+- Frontend toggle: embeds `data-svc-pid` for node/python/mcp-claude services
+- Frontend toggle click handler: routes to stop-pid endpoint when pid present and running
+- Recommendations click handler: `stop_pid` action routes to `/api/service/stop-pid/{target}`
+
+**Step 6 — Recommendation engine: type-based (metrics.py `_get_recommendations`):**
+- Homebrew recs: `svc["type"] == "homebrew"` replaces name list (`"MongoDB"`, `"PostgreSQL"`, `"Redis"`)
+- Node/Python recs: `svc["type"] in ("node", "python") and uptime > 60 and mem > 30`
+- Node/Python rec action: `"stop_pid"` with PID as target (not name)
+- `"NestJS"` name-check removed
+
+**Step 7 — MCP recommendation text (metrics.py):**
+- Removed "Claude Code" reference: `"only needed when using Claude Code"` → `"stop if not actively using these tools to free RAM"`
+
+**Bonus fixes during audit:**
+- `import json as _json` inside function moved to top-level imports
+- Footer GitHub URL in index.html fixed: `jagang` → `jagangirisaballa` (missed in Phase 1)
+
+### Audit results — all 7 steps PASS
+- `_SERVICE_PATTERNS` deleted: confirmed
+- `mcp-claude` type string consistent across all 4 locations: confirmed
+- No stale `"mcp"` type strings: confirmed
+- No Electron/app processes leaked into services panel: confirmed
+- `collect()` runs clean, all types correct: confirmed
+
+### Files Touched
+- `macmon/metrics.py` — Steps 1–7
+- `macmon/actions.py` — Step 5 (stop_pid)
+- `macmon/server.py` — Step 5 (stop-pid route)
+- `macmon/static/index.html` — Steps 5+6 (toggle routing, process tagger, footer URL fix)
+- `docs/session-log.md`
+- `docs/backlog/active.md`
+
+### Pending (carried to next session)
 - Push to GitHub (repo not yet created — create at github.com/jagangirisaballa/macmon first)
 - H-01, H-02, H-03, M-01 through M-05, L-01 through L-03 — all deferred to v1.1

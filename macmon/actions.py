@@ -25,18 +25,6 @@ _LAUNCH_AGENTS = {
 }
 
 
-def _find_pids_by_pattern(patterns: list[str]) -> list[int]:
-    pids = []
-    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
-        try:
-            cmdline = " ".join(proc.info["cmdline"] or [])
-            pname = proc.info["name"] or ""
-            if any(p in cmdline or p in pname for p in patterns):
-                pids.append(proc.pid)
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-    return pids
-
 
 def stop_service(name: str) -> dict[str, Any]:
     if name in _HOMEBREW_SERVICES:
@@ -81,6 +69,11 @@ def start_service(name: str) -> dict[str, Any]:
             return {"success": True, "message": f"{name} started"}
         return {"success": False, "message": result.stderr.strip() or f"Could not start {name}"}
     return {"success": False, "message": f"Auto-start not supported for {name} — start it manually"}
+
+
+def stop_pid(pid: int) -> dict[str, Any]:
+    """Stop an auto-discovered service (node/python/mcp) by PID."""
+    return kill_process(pid)
 
 
 def kill_process(pid: int) -> dict[str, Any]:

@@ -1,3 +1,4 @@
+import json
 import os
 import psutil
 import subprocess
@@ -59,19 +60,6 @@ def _get_disk() -> dict[str, Any]:
         "percent": round(d.percent, 1),
     }
 
-
-# Known dev service patterns: (display_name, type, match_strings)
-_SERVICE_PATTERNS = [
-    ("MongoDB", "homebrew", ["mongod"]),
-    ("PostgreSQL", "homebrew", ["postgres", "postgresql"]),
-    ("NestJS B2B", "node", ["nest start", "b2b_server"]),
-    ("NestJS dist", "node", ["b2b_server/dist"]),
-    ("Redis", "homebrew", ["redis-server"]),
-    ("clawdbot", "system", ["clawdbot"]),
-    ("MCP Supabase", "mcp", ["mcp-server-supabase"]),
-    ("MCP Analytics", "mcp", ["mcp-google-analytics"]),
-    ("macmon", "self", ["uvicorn macmon.server"]),
-]
 
 # macmon's own PID — shown but flagged as self so UI can warn
 _OWN_PID = os.getpid()
@@ -215,30 +203,170 @@ def _get_services() -> list[dict[str, Any]]:
             "memory_mb": mem_mb, "uptime_minutes": uptime, "is_self": False,
         })
 
-    # 3. Well-known dev processes not covered above
-    _DEV_PATTERNS = [
-        ("macmon", "self", ["uvicorn macmon.server"]),
-    ]
-    for display_name, svc_type, patterns in _DEV_PATTERNS:
-        proc = find_proc(patterns)
-        if not proc:
-            if display_name in _seen_service_names:
-                services.append({
-                    "name": display_name, "type": svc_type, "pid": None,
-                    "running": False, "cpu_percent": 0.0, "memory_mb": 0.0,
-                    "uptime_minutes": None, "is_self": svc_type == "self",
-                })
-            continue
-        matched_pids.add(proc.pid)
-        is_self = (proc.pid == _OWN_PID or svc_type == "self")
-        cpu = proc.info["cpu_percent"] or 0.0
-        mem_mb = round((proc.info["memory_info"].rss if proc.info["memory_info"] else 0) / 1e6, 1)
-        uptime = round((time.time() - proc.info["create_time"]) / 60)
+    # 3. macmon self-detection
+    macmon_proc = find_proc(["uvicorn macmon.server"])
+    if macmon_proc:
+        matched_pids.add(macmon_proc.pid)
+        cpu = macmon_proc.info["cpu_percent"] or 0.0
+        mem_mb = round((macmon_proc.info["memory_info"].rss if macmon_proc.info["memory_info"] else 0) / 1e6, 1)
+        uptime = round((time.time() - macmon_proc.info["create_time"]) / 60)
         services.append({
-            "name": display_name, "type": svc_type, "pid": proc.pid,
+            "name": "macmon", "type": "self", "pid": macmon_proc.pid,
             "running": True, "cpu_percent": round(cpu, 1),
-            "memory_mb": mem_mb, "uptime_minutes": uptime, "is_self": is_self,
+            "memory_mb": mem_mb, "uptime_minutes": uptime, "is_self": True,
         })
+    elif "macmon" in _seen_service_names:
+        services.append({
+            "name": "macmon", "type": "self", "pid": None,
+            "running": False, "cpu_percent": 0.0, "memory_mb": 0.0,
+            "uptime_minutes": None, "is_self": True,
+        })
+
+    # 4. MCP server auto-discovery — match actual worker processes (not npm exec wrappers)
+    def _mcp_name(cmdline: str, parts: list[str]) -> str:
+        # Try to extract project-ref for disambiguation
+        project_ref = None
+        for i, part in enumerate(parts):
+            if part == "--project-ref" and i + 1 < len(parts):
+                project_ref = parts[i + 1][:8]  # first 8 chars of ref
+                break
+        for part in parts:
+            if "/.bin/mcp-" in part or "/mcp-server-" in part:
+                base = part.rsplit("/", 1)[-1]
+                for prefix in ("mcp-server-", "mcp-"):
+                    if base.startswith(prefix):
+                        base = base[len(prefix):]
+                        break
+                label = "MCP " + base.replace("-", " ").title()
+                if project_ref:
+                    label += f" ({project_ref})"
+                return label
+        return "MCP server"
+
+    for proc in all_procs:
+        try:
+            if proc.pid in matched_pids:
+                continue
+            cmd_parts = proc.info["cmdline"] or []
+            cmdline = " ".join(cmd_parts)
+            pname = proc.info["name"] or ""
+            # Skip npm exec wrappers — only match the actual node worker
+            if "npm" in pname or cmdline.startswith("npm "):
+                continue
+            is_mcp = (
+                "/.bin/mcp-" in cmdline
+                or "/mcp-server-" in cmdline
+                or "mcp-server-" in pname
+            )
+            if not is_mcp:
+                continue
+            matched_pids.add(proc.pid)
+            name = _mcp_name(cmdline, cmd_parts)
+            cpu = proc.info["cpu_percent"] or 0.0
+            mem_mb = round((proc.info["memory_info"].rss if proc.info["memory_info"] else 0) / 1e6, 1)
+            uptime = round((time.time() - proc.info["create_time"]) / 60)
+            services.append({
+                "name": name, "type": "mcp-claude", "pid": proc.pid,
+                "running": True, "cpu_percent": round(cpu, 1),
+                "memory_mb": mem_mb, "uptime_minutes": uptime, "is_self": False,
+            })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    # 5. Node/Bun/Deno dev server auto-discovery
+    # Only match intentional dev servers — exclude Electron helpers and npx cache runners
+    _NODE_DEV_SIGNALS = (
+        "npm start", "npm run", "ng serve", "next dev", "next start",
+        "vite", "nest start", "ts-node", "nodemon", "tsx watch", "tsx ",
+    )
+    _NVM_CACHE_MARKER = "/.npm/_npx/"  # npm exec cache path — these are MCP/tool wrappers, not app servers
+
+    def _node_display_name(proc) -> str:
+        cmdline = " ".join(proc.info["cmdline"] or [])
+        try:
+            cwd = proc.cwd()
+            pkg = Path(cwd) / "package.json"
+            if pkg.exists():
+                data = json.loads(pkg.read_text())
+                if data.get("name"):
+                    return data["name"]
+        except Exception:
+            pass
+        # Fallback: last meaningful arg
+        parts = (proc.info["cmdline"] or [])
+        for part in reversed(parts):
+            if part.endswith(".js") or part.endswith(".ts"):
+                return Path(part).stem
+        return proc.info["name"] or "node"
+
+    for proc in all_procs:
+        try:
+            if proc.pid in matched_pids:
+                continue
+            pname = proc.info["name"] or ""
+            if pname not in ("node", "bun", "deno"):
+                continue
+            cmdline = " ".join(proc.info["cmdline"] or [])
+            # Skip npx cache runners (MCP wrappers, one-off tools)
+            if _NVM_CACHE_MARKER in cmdline:
+                continue
+            # Require a known dev server signal in the cmdline
+            if not any(sig in cmdline for sig in _NODE_DEV_SIGNALS):
+                continue
+            # Skip if parent process is already a matched dev server (e.g. ng serve child of npm start)
+            try:
+                ppid = proc.ppid()
+                if ppid in matched_pids:
+                    continue
+            except Exception:
+                pass
+            matched_pids.add(proc.pid)
+            name = _node_display_name(proc)
+            cpu = proc.info["cpu_percent"] or 0.0
+            mem_mb = round((proc.info["memory_info"].rss if proc.info["memory_info"] else 0) / 1e6, 1)
+            uptime = round((time.time() - proc.info["create_time"]) / 60)
+            services.append({
+                "name": name, "type": "node", "pid": proc.pid,
+                "running": True, "cpu_percent": round(cpu, 1),
+                "memory_mb": mem_mb, "uptime_minutes": uptime, "is_self": False,
+            })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    # 6. Python server auto-discovery (uvicorn/gunicorn/flask/django)
+    _PYTHON_SERVER_SIGNALS = ("uvicorn ", "gunicorn ", "flask run", "manage.py runserver")
+
+    def _python_display_name(cmdline: str) -> str:
+        parts = cmdline.split()
+        for i, part in enumerate(parts):
+            if part in ("uvicorn", "gunicorn") and i + 1 < len(parts):
+                app_arg = parts[i + 1]
+                # e.g. "macmon.server:app" → "macmon"
+                module = app_arg.split(":")[0].split(".")[0]
+                if module and not module.startswith("-"):
+                    return module
+        return "python server"
+
+    for proc in all_procs:
+        try:
+            if proc.pid in matched_pids:
+                continue
+            cmdline = " ".join(proc.info["cmdline"] or [])
+            is_py_server = any(sig in cmdline for sig in _PYTHON_SERVER_SIGNALS)
+            if not is_py_server:
+                continue
+            matched_pids.add(proc.pid)
+            name = _python_display_name(cmdline)
+            cpu = proc.info["cpu_percent"] or 0.0
+            mem_mb = round((proc.info["memory_info"].rss if proc.info["memory_info"] else 0) / 1e6, 1)
+            uptime = round((time.time() - proc.info["create_time"]) / 60)
+            services.append({
+                "name": name, "type": "python", "pid": proc.pid,
+                "running": True, "cpu_percent": round(cpu, 1),
+                "memory_mb": mem_mb, "uptime_minutes": uptime, "is_self": False,
+            })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
 
     # Update persistent known services
     new_names = {s["name"] for s in services if s["running"]}
@@ -322,24 +450,25 @@ def _get_recommendations(memory: dict, swap: dict, services: list, processes: li
             continue
         uptime = svc.get("uptime_minutes") or 0
         mem = svc["memory_mb"]
-        if svc["name"] in ("MongoDB", "PostgreSQL", "Redis") and mem > 5:
+        svc_type = svc.get("type", "")
+        if svc_type == "homebrew" and mem > 5:
             priority = "high" if swap_pct > 30 else "medium"
             recs.append({
-                "id": f"stop_{svc['name'].lower()}",
+                "id": f"stop_{svc['name'].lower().replace(' ', '_')}",
                 "priority": priority,
                 "title": f"Stop {svc['name']}",
                 "description": f"Consuming {mem} MB — stop if not actively developing to free RAM and reduce swap",
                 "action": "stop_service",
                 "target": svc["name"],
             })
-        if "NestJS" in svc["name"] and uptime > 60:
+        if svc_type in ("node", "python") and uptime > 60 and mem > 30:
             recs.append({
-                "id": f"stop_{svc['name'].lower().replace(' ', '_')}",
+                "id": f"stop_{svc['name'].lower().replace(' ', '_')}_{svc.get('pid', '')}",
                 "priority": "high" if swap_pct > 30 else "medium",
                 "title": f"Stop {svc['name']}",
                 "description": f"Running for {uptime}m consuming {mem} MB — stop if not actively developing",
-                "action": "stop_service",
-                "target": svc["name"],
+                "action": "stop_pid",
+                "target": svc.get("pid"),
             })
 
     # Chrome
@@ -363,7 +492,7 @@ def _get_recommendations(memory: dict, swap: dict, services: list, processes: li
             "id": "stop_mcp",
             "priority": "low",
             "title": "Stop MCP servers",
-            "description": f"{len(mcp_services)} MCP servers using {round(mcp_total)} MB — only needed when using Claude Code",
+            "description": f"{len(mcp_services)} MCP servers using {round(mcp_total)} MB — stop if not actively using these tools to free RAM",
             "action": "none",
             "target": None,
         })
