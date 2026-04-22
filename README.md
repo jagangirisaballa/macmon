@@ -6,19 +6,23 @@ A dashboard that lives in your browser and tells you exactly what your Mac is do
 
 ---
 
-## Quick install (for developers)
+## Quick install
 
-Already have Python 3.9+ and pip? Three commands:
+```bash
+pip install macmon
+macmon start
+```
 
+Browser opens automatically. Done.
+
+> **New to this?** Skip to the [step-by-step install guide](#step-by-step-install-for-everyone) below.
+
+**Want to run from source?**
 ```bash
 git clone https://github.com/jagangirisaballa/macmon.git
 cd macmon
 pip install -e .
 ```
-
-Then `macmon start` — browser opens automatically. Done.
-
-> **New to this?** Skip to the [step-by-step install guide](#step-by-step-install-for-everyone) below.
 
 ---
 
@@ -124,10 +128,10 @@ The text at the start of your Terminal line will now include `macmon`. That mean
 ### Step 4 — Install macmon
 
 ```
-pip3 install -e .
+pip3 install macmon
 ```
 
-This installs the four small libraries macmon needs. Lots of text will scroll by — that's normal. It takes about 30 seconds. When your cursor comes back with no red error text, it worked.
+This downloads macmon and the four small libraries it needs. Lots of text will scroll by — that's normal. It takes about 30 seconds. When your cursor comes back with no red error text, it worked.
 
 ---
 
@@ -163,7 +167,7 @@ The address is **http://localhost:9999** — this is like a website, but it only
 ## Troubleshooting
 
 **`macmon: command not found`**
-Close Terminal fully (Cmd + Q), reopen it, and try again. If that doesn't fix it, run `pip3 install -e .` again from inside the macmon folder.
+Close Terminal fully (Cmd + Q), reopen it, and try again. If that doesn't fix it, run `pip3 install macmon` again.
 
 **Browser doesn't open automatically**
 Open your browser manually and go to `http://localhost:9999`. If that shows nothing, run `macmon stop` then `macmon start`.
