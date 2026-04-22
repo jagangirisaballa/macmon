@@ -51,24 +51,52 @@ def cmd_start(port: int, no_browser: bool):
         print(f"  cat {LOGFILE}")
 
 
+def _find_macmon_pids() -> list[int]:
+    """Find all running uvicorn macmon.server processes regardless of PID file."""
+    import psutil
+    pids = []
+    for proc in psutil.process_iter(["pid", "cmdline"]):
+        try:
+            cmdline = " ".join(proc.info["cmdline"] or [])
+            if "uvicorn" in cmdline and "macmon.server" in cmdline:
+                pids.append(proc.pid)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return pids
+
+
 def cmd_stop():
+    killed = []
+
+    # Kill by PID file first
     running, pid = _is_running()
-    if not running:
+    if running:
+        try:
+            os.kill(pid, signal.SIGTERM)
+            killed.append(pid)
+        except ProcessLookupError:
+            pass
+    PIDFILE.unlink(missing_ok=True)
+
+    # Always scan for any remaining macmon processes — catches restart-spawned or orphaned procs
+    for pid in _find_macmon_pids():
+        if pid not in killed:
+            try:
+                os.kill(pid, signal.SIGTERM)
+                killed.append(pid)
+            except (ProcessLookupError, PermissionError):
+                pass
+
+    if killed:
+        print(f"macmon stopped (PID {', '.join(str(p) for p in killed)})")
+    else:
         print("macmon is not running.")
-        return
-    try:
-        os.kill(pid, signal.SIGTERM)
-        PIDFILE.unlink(missing_ok=True)
-        print(f"macmon stopped (PID {pid})")
-    except ProcessLookupError:
-        PIDFILE.unlink(missing_ok=True)
-        print("macmon was not running.")
 
 
 def cmd_status(port: int):
-    running, pid = _is_running()
-    if running:
-        print(f"macmon is running (PID {pid}) → http://localhost:{port}")
+    pids = _find_macmon_pids()
+    if pids:
+        print(f"macmon is running (PID {', '.join(str(p) for p in pids)}) → http://localhost:{port}")
     else:
         print("macmon is not running. Start with: macmon start")
 

@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import metrics, notifications, actions
 
-app = FastAPI(title="macmon", version="1.1.1")
+app = FastAPI(title="macmon", version="1.1.2")
 
 STATIC_DIR = Path(__file__).parent / "static"
 if STATIC_DIR.exists():
