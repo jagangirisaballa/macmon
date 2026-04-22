@@ -88,7 +88,7 @@ python3 --version
 
 **What you'll see:**
 
-- `Python 3.9.x` or higher → you're good, skip to Step 3
+- `Python 3.9.x` or higher → you're good, skip to Step 3 — Install macmon
 - `command not found` or `Python 2.x` → you need to install Python (see below)
 
 **Installing Python (only if needed):**
@@ -103,39 +103,19 @@ python3 --version
 
 ---
 
-### Step 3 — Download macmon
-
-In Terminal, run:
-
-```
-git clone https://github.com/jagangirisaballa/macmon.git
-```
-
-This downloads the macmon files onto your Mac into a folder called `macmon`.
-
-> **If a popup appears saying "Install Command Line Tools"** — click Install and wait for it to finish (a few minutes). Then run the command above again.
-
-Now move into that folder:
-
-```
-cd macmon
-```
-
-The text at the start of your Terminal line will now include `macmon`. That means you're in the right place.
-
----
-
-### Step 4 — Install macmon
+### Step 3 — Install macmon
 
 ```
 pip3 install macmon
 ```
 
-This downloads macmon and the four small libraries it needs. Lots of text will scroll by — that's normal. It takes about 30 seconds. When your cursor comes back with no red error text, it worked.
+**What's happening:** This downloads macmon and everything it needs directly from the internet. Lots of text will scroll by — that's normal. It takes about 30 seconds.
+
+When your cursor comes back with no red error text, and you see `Successfully installed macmon` somewhere in the output, you're done.
 
 ---
 
-### Step 5 — Start the dashboard
+### Step 4 — Start the dashboard
 
 ```
 macmon start
