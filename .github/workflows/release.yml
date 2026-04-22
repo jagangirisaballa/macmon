@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -19,16 +22,23 @@ jobs:
           python-version: "3.11"
 
       - name: Install build tools
-        run: pip install build twine
+        run: pip install build twine requests
 
       - name: Build package
         run: python -m build
 
-      - name: Publish to PyPI
+      - name: Publish to PyPI (skip if version already exists)
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: twine upload dist/*
+        run: |
+          VERSION=$(python -c "import re; v=open('pyproject.toml').read(); print(re.search(r'version = \"(.+?)\"', v).group(1))")
+          STATUS=$(python -c "import urllib.request; r=urllib.request.urlopen('https://pypi.org/pypi/macmon/$VERSION/json'); print(r.status)" 2>/dev/null || echo "404")
+          if [ "$STATUS" = "200" ]; then
+            echo "Version $VERSION already on PyPI — skipping upload"
+          else
+            twine upload dist/*
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
