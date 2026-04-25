@@ -7,7 +7,7 @@ import subprocess
 import time
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 _cpu_history: list[float] = []
 _last_slow_notification = 0.0
@@ -96,20 +96,31 @@ def _save_known_services(names: set[str]) -> None:
 _seen_service_names: set[str] = _load_known_services()
 
 
-def _get_brew_services() -> tuple[dict[str, str], bool]:
-    """Returns ({brew_name: status}, homebrew_available)."""
+def _get_brew_services() -> tuple[dict[str, str], bool, Optional[str]]:
+    """Returns ({brew_name: status}, homebrew_available, warning_message)."""
     if not shutil.which("brew"):
-        return {}, False
+        return {}, False, "Homebrew is not installed or not on PATH"
     try:
-        out = subprocess.check_output(["brew", "services", "list"], text=True, timeout=10)
+        result = subprocess.run(
+            ["brew", "services", "list"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            if len(detail) > 140:
+                detail = detail[:137] + "..."
+            return {}, False, detail or "brew services list failed"
+        out = result.stdout
         result = {}
         for line in out.splitlines()[1:]:  # skip header
             parts = line.split()
             if parts:
                 result[parts[0]] = parts[1] if len(parts) > 1 else "none"
-        return result, True
-    except Exception:
-        return {}, True  # brew exists but call failed — don't show the warning
+        return result, True, None
+    except Exception as exc:
+        return {}, False, str(exc)
 
 
 def _get_launch_agents() -> dict[str, str]:
@@ -151,12 +162,13 @@ def _get_services() -> list[dict[str, Any]]:
         return None
 
     # 1. Homebrew services — full list including stopped
-    brew_all, brew_available = _get_brew_services()
+    brew_all, brew_available, brew_warning = _get_brew_services()
     if not brew_available:
         services.append({
-            "name": "Homebrew not found", "type": "warning", "pid": None,
+            "name": "Homebrew unavailable", "type": "warning", "pid": None,
             "running": False, "cpu_percent": 0.0, "memory_mb": 0.0,
             "uptime_minutes": None, "is_self": False,
+            "detail": brew_warning or "brew services could not be queried",
         })
     _BREW_DISPLAY = {
         "mongodb-community": "MongoDB",

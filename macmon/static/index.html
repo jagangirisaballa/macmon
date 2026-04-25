@@ -208,7 +208,7 @@
       <div>
         <div style="display:flex;align-items:center;gap:8px;">
           <div class="hdr__name">macmon</div>
-          <span class="hdr__ver mono">v1.1.3</span>
+          <span class="hdr__ver mono">v1.1.4</span>
         </div>
         <div style="font-size:11.5px;color:var(--text-muted);margin-top:1px;">local · no telemetry</div>
       </div>
@@ -301,7 +301,7 @@
   </section>
 
   <footer class="ftr">
-    <div class="ftr__sys">macmon v1.1.3 · local-only · no telemetry · MIT</div>
+    <div class="ftr__sys">macmon v1.1.4 · local-only · no telemetry · MIT</div>
     <div class="ftr__links">
       <a href="https://github.com/jagangirisaballa/macmon" target="_blank">GitHub ↗</a>
       <a href="https://github.com/jagangirisaballa/macmon/issues" target="_blank">Issues</a>
@@ -324,11 +324,19 @@
 </svg>
 
 <script>
-const WS_URL = 'ws://' + location.host + '/ws';
-const API_URL = 'http://' + location.host;
+const SESSION_TOKEN = "__MACMON_TOKEN__";
+const WS_PROTO = location.protocol === 'https:' ? 'wss://' : 'ws://';
+const WS_URL = WS_PROTO + location.host + '/ws?token=' + encodeURIComponent(SESSION_TOKEN);
+const API_URL = location.origin;
 const GAUGE_R = 30, GAUGE_C = 2 * Math.PI * GAUGE_R;
 let _data = null, _procSort = 'memory', _svcFilter = 'all', _alertDismissed = false;
 let _theme = localStorage.getItem('macmon-theme') || 'dark';
+
+async function apiFetch(path, options) {
+  var opts = options || {};
+  var headers = Object.assign({}, opts.headers || {}, {'X-Macmon-Token': SESSION_TOKEN});
+  return fetch(API_URL + path, Object.assign({}, opts, {headers: headers}));
+}
 
 function sev(p) { return p >= 85 ? 'crit' : p >= 65 ? 'warn' : 'ok'; }
 function sevLabel(s) { return {ok:'Normal',warn:'Elevated',crit:'Critical'}[s]; }
@@ -426,10 +434,13 @@ function renderServices(services) {
       : '—';
     var isSelf = s.is_self === true;
     var isMcpClaude = s.type === 'mcp-claude';
-    var isReadOnly = isSelf || isMcpClaude;
+    var isWarning = s.type === 'warning';
+    var isReadOnly = isSelf || isMcpClaude || isWarning;
     var readOnlyTitle = isSelf
       ? 'This is macmon itself — stopping it will close the dashboard'
-      : 'Managed by Claude Code — cannot be stopped independently';
+      : isMcpClaude
+      ? 'Managed by Claude Code — cannot be stopped independently'
+      : (s.detail || 'Unavailable');
     var pidTypes = ['node', 'python'];
     var usesPid = pidTypes.indexOf(s.type) !== -1 && s.pid != null;
     var toggleHtml = isReadOnly
@@ -439,15 +450,20 @@ function renderServices(services) {
       ? ' <span style="font-family:var(--f-mono);font-size:9.5px;color:var(--warn);background:var(--warn-soft);padding:1px 5px;border-radius:4px;border:1px solid rgba(245,158,11,0.3);">this dashboard</span>'
       : isMcpClaude
       ? ' <span style="font-family:var(--f-mono);font-size:9.5px;color:var(--text-dim);background:var(--bg-elev-2);padding:1px 5px;border-radius:4px;border:1px solid var(--border);">claude code</span>'
+      : isWarning
+      ? ' <span style="font-family:var(--f-mono);font-size:9.5px;color:var(--warn);background:var(--warn-soft);padding:1px 5px;border-radius:4px;border:1px solid rgba(245,158,11,0.3);">warning</span>'
       : '';
+    var metaText = isWarning
+      ? (s.detail || 'Unavailable')
+      : s.type + ' · ' + (s.running ? 'up ' + uptime : 'stopped');
     return '<div class="row svc">' +
       '<div class="svc__icon">' + letter + '</div>' +
       '<div class="svc__info">' +
       '<div class="svc__name">' + s.name + warningBadge + '</div>' +
-      '<div class="svc__path">' + s.type + ' · ' + (s.running ? 'up ' + uptime : 'stopped') + '</div></div>' +
+      '<div class="svc__path">' + metaText + '</div></div>' +
       '<span class="pill ' + (s.running ? 'pill--ok' : 'pill--muted') + '" style="min-width:62px;justify-content:center;">' +
       '<span class="pill__dot"></span>' + (s.running ? 'running' : 'stopped') + '</span>' +
-      '<div class="svc__mem">' + (s.running ? '<strong>' + s.memory_mb + '</strong> MB' : '—') + '</div>' +
+      '<div class="svc__mem">' + (isWarning ? '—' : (s.running ? '<strong>' + s.memory_mb + '</strong> MB' : '—')) + '</div>' +
       toggleHtml +
       '</div>';
   }).join('');
@@ -522,7 +538,7 @@ function toast(msg, type) {
 
 async function apiCall(url, label, refreshDelay) {
   try {
-    var res = await fetch(url, {method:'POST'});
+    var res = await apiFetch(url, {method:'POST'});
     var json = await res.json();
     toast(json.message || (json.success ? label + ' succeeded' : label + ' failed'), json.success ? 'ok' : 'err');
     if (json.success) {
@@ -548,8 +564,8 @@ function wireEvents() {
     var pid = btn.dataset.svcPid;
     btn.disabled = true;
     var url = (running && pid)
-      ? API_URL + '/api/service/stop-pid/' + pid
-      : API_URL + '/api/service/' + encodeURIComponent(name) + '/' + (running ? 'stop' : 'start');
+      ? '/api/service/stop-pid/' + pid
+      : '/api/service/' + encodeURIComponent(name) + '/' + (running ? 'stop' : 'start');
     await apiCall(url, (running?'Stop':'Start') + ' ' + name, 1500);
     btn.disabled = false;
   });
@@ -562,7 +578,7 @@ function wireEvents() {
     var row = btn.closest('.row');
     btn.disabled = true;
     try {
-      var res = await fetch(API_URL + '/api/process/' + pid + '/kill', {method:'POST'});
+      var res = await apiFetch('/api/process/' + pid + '/kill', {method:'POST'});
       var json = await res.json();
       toast(json.message || (json.success ? 'Killed PID ' + pid : 'Kill failed'), json.success ? 'ok' : 'err');
       if (json.success) {
@@ -581,10 +597,10 @@ function wireEvents() {
     var action = btn.dataset.action, target = btn.dataset.target;
     btn.disabled = true; btn.textContent = 'Running\u2026';
     var url = action === 'stop_service'
-      ? API_URL + '/api/service/' + encodeURIComponent(target) + '/stop'
+      ? '/api/service/' + encodeURIComponent(target) + '/stop'
       : action === 'stop_pid'
-      ? API_URL + '/api/service/stop-pid/' + encodeURIComponent(target)
-      : API_URL + '/api/action/' + encodeURIComponent(action);
+      ? '/api/service/stop-pid/' + encodeURIComponent(target)
+      : '/api/action/' + encodeURIComponent(action);
     // purge needs 4s for memory to settle before re-reading metrics
     var delay = action === 'purge_memory' ? 4000 : 1500;
     await apiCall(url, action, delay);
@@ -650,7 +666,7 @@ function connectWS() {
 
 document.getElementById('stop-btn').addEventListener('click', async function() {
   if (!confirm('Stop macmon? The dashboard will close. Run "macmon start" to open it again.')) return;
-  try { await fetch(API_URL + '/api/shutdown', {method:'POST'}); } catch(_) {}
+  try { await apiFetch('/api/shutdown', {method:'POST'}); } catch(_) {}
   document.getElementById('hdr-ts').classList.add('disconnected');
   document.getElementById('global-pill').className = 'pill pill--muted';
   document.getElementById('global-pill-label').textContent = 'Stopped';
@@ -662,7 +678,7 @@ document.getElementById('stop-btn').addEventListener('click', async function() {
 document.getElementById('restart-btn').addEventListener('click', async function() {
   if (!confirm('Restart the macmon server? The page will reload automatically when it is back up.')) return;
   document.getElementById('restart-overlay').classList.remove('hidden');
-  try { await fetch(API_URL + '/api/restart', {method:'POST'}); } catch(_) {}
+  try { await apiFetch('/api/restart', {method:'POST'}); } catch(_) {}
   var attempts = 0;
   var iv = setInterval(async function() {
     attempts++;
